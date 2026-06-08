@@ -44,6 +44,7 @@ export interface Messages {
   langLabel: string;
   panelLabel: string;
   fontSizeLabel: string;
+  bgOpacityLabel: string;
   // aria
   ariaToggleSubtitles: string;
   ariaNotifyReady: string;
@@ -82,6 +83,7 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     langLabel: "Subtitle language",
     panelLabel: "History panel (right)",
     fontSizeLabel: "Subtitle size",
+    bgOpacityLabel: "Background opacity",
     ariaToggleSubtitles: "Toggle subtitles",
     ariaNotifyReady: "Notify when ready",
     panelTitle: "Subtitle history",
@@ -116,6 +118,7 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     langLabel: "字幕の言語",
     panelLabel: "右側の履歴パネル",
     fontSizeLabel: "字幕サイズ",
+    bgOpacityLabel: "背景の透明度",
     ariaToggleSubtitles: "字幕のオン/オフ",
     ariaNotifyReady: "完了時に通知",
     panelTitle: "字幕履歴",
@@ -148,6 +151,7 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     langLabel: "字幕语言",
     panelLabel: "右侧历史面板",
     fontSizeLabel: "字幕大小",
+    bgOpacityLabel: "背景透明度",
     ariaToggleSubtitles: "开关字幕",
     ariaNotifyReady: "完成时通知",
     panelTitle: "字幕历史",
@@ -182,6 +186,7 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     langLabel: "Bahasa subtitle",
     panelLabel: "Panel riwayat (kanan)",
     fontSizeLabel: "Ukuran subtitle",
+    bgOpacityLabel: "Transparansi latar",
     ariaToggleSubtitles: "Aktifkan/nonaktifkan subtitle",
     ariaNotifyReady: "Beri tahu saat siap",
     panelTitle: "Riwayat subtitle",

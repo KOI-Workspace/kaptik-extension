@@ -10,8 +10,10 @@ export interface KaptikSettings {
   showSpeaker: boolean;
   /** 자막 글자 크기 배율 (0.8 ~ 1.6) */
   fontScale: number;
-  /** 가운데 하단 오버레이에 한 번에 보일 문장 수 (1 ~ 3) */
+  /** 가운데 하단 오버레이에 한 번에 보일 문장 수 (1 ~ 5, 핸들로 조절) */
   overlayLineCount: number;
+  /** 가운데 오버레이 배경(검은색) 불투명도 (0 ~ 1) */
+  overlayOpacity: number;
   /** 우측 히스토리 패널 표시 여부 */
   showPanel: boolean;
   /** 자막 생성 완료 시 시스템 알림 받기 */
@@ -27,17 +29,19 @@ export const DEFAULT_SETTINGS: KaptikSettings = {
   language: "en",
   showSpeaker: true,
   fontScale: 1,
-  overlayLineCount: 2,
+  overlayLineCount: 1,
+  overlayOpacity: 0.6,
   showPanel: true,
   notifyOnReady: true,
 };
 
 /**
  * 저장된 설정을 읽어 기본값과 병합해 반환한다.
+ * 즉시 반영을 위해 chrome.storage.local 사용 (sync는 지연/쓰기 제한이 있음).
  * @returns 완전한 형태의 설정 객체
  */
 export async function getSettings(): Promise<KaptikSettings> {
-  const result = await chrome.storage.sync.get(SETTINGS_KEY);
+  const result = await chrome.storage.local.get(SETTINGS_KEY);
   return { ...DEFAULT_SETTINGS, ...(result[SETTINGS_KEY] ?? {}) };
 }
 
@@ -50,7 +54,7 @@ export async function updateSettings(
 ): Promise<KaptikSettings> {
   const current = await getSettings();
   const next = { ...current, ...patch };
-  await chrome.storage.sync.set({ [SETTINGS_KEY]: next });
+  await chrome.storage.local.set({ [SETTINGS_KEY]: next });
   return next;
 }
 
@@ -66,7 +70,7 @@ export function onSettingsChanged(
     changes: { [key: string]: chrome.storage.StorageChange },
     area: string,
   ) => {
-    if (area === "sync" && changes[SETTINGS_KEY]) {
+    if (area === "local" && changes[SETTINGS_KEY]) {
       callback({ ...DEFAULT_SETTINGS, ...(changes[SETTINGS_KEY].newValue ?? {}) });
     }
   };

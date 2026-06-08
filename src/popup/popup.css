@@ -1,0 +1,354 @@
+/*
+ * Kaptik 설정 팝업 스타일
+ * 디자인 토큰: 다크 서피스(#191919/#202020), 브랜드 퍼플 #8353EB, 흰 글씨
+ */
+
+:root {
+  --color-brand: #8353eb;
+  --color-brand-hover: #7445da;
+  --color-page: #0a0a0a;
+  --color-surface: #191919;
+  --color-surface-elevated: #202020;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #b7b7b7;
+  --color-text-tertiary: #7d7d7d;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --radius-card: 16px;
+  --radius-pill: 999px;
+  font-family: "Inter", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 320px;
+  background: var(--color-page);
+  color: var(--color-text-primary);
+}
+
+.popup {
+  padding: 18px 16px 16px;
+}
+
+/* ── 헤더 ── */
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.popup-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup-logo {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+}
+
+.popup-logo span {
+  color: var(--color-brand);
+}
+
+.popup-subtitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+}
+
+/* ── 토글 스위치 ── */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 26px;
+  flex: 0 0 auto;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-track {
+  position: absolute;
+  inset: 0;
+  background: #3a3a3a;
+  border-radius: var(--radius-pill);
+  transition: background 160ms ease-out;
+}
+
+.switch-track::before {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  left: 3px;
+  top: 3px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 160ms ease-out;
+}
+
+.switch input:checked + .switch-track {
+  background: var(--color-brand);
+}
+
+.switch input:checked + .switch-track::before {
+  transform: translateX(18px);
+}
+
+/* ── 설정 카드 ── */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 4px 14px;
+  margin-bottom: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.row-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── 언어 셀렉트 ── */
+.select {
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+}
+
+.select:focus {
+  border-color: rgba(131, 83, 235, 0.75);
+  box-shadow: 0 0 0 3px rgba(131, 83, 235, 0.16);
+}
+
+/* ── 폰트 크기 슬라이더 ── */
+.slider-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 14px 0;
+}
+
+.slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.slider-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-brand);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: #3a3a3a;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  cursor: pointer;
+  box-shadow: 0 0 0 4px rgba(131, 83, 235, 0.18);
+}
+
+/* ── 미리보기 ── */
+.preview {
+  background: linear-gradient(180deg, #141414 0%, #050505 100%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 16px 14px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.preview-speaker {
+  color: var(--color-brand);
+  font-size: 11px;
+  font-weight: 850;
+  margin-bottom: 3px;
+}
+
+.preview-text {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.35;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* ── 푸터 ── */
+.popup-footer {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-top: 4px;
+}
+
+/* ── 상태 뷰 (없음/생성중/지원안함 등) ── */
+.state-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 18px 8px 14px;
+}
+
+.state-checking {
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.state-emoji {
+  font-size: 30px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.state-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+.state-desc {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 250px;
+}
+
+.state-note {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+}
+
+/* ── 기본 버튼 ── */
+.btn-primary {
+  width: 100%;
+  height: 46px;
+  margin-top: 8px;
+  border: none;
+  border-radius: 12px;
+  background: var(--color-brand);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 140ms ease-out, transform 140ms ease-out;
+}
+
+.btn-primary:hover {
+  background: var(--color-brand-hover);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+/* ── 진행률 ── */
+.progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: #2a2a2a;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8353eb 0%, #b488ff 100%);
+  transition: width 600ms ease-out;
+}
+
+.progress-meta {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  margin-top: 6px;
+}
+
+.progress-meta span:first-child {
+  color: var(--color-brand);
+}
+
+/* ── 문장 수 스텝퍼 ── */
+.stepper {
+  display: flex;
+  gap: 6px;
+}
+
+.stepper-btn {
+  width: 34px;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 140ms ease-out;
+}
+
+.stepper-btn.is-on {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: #fff;
+}

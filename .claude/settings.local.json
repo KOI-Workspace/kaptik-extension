@@ -13,7 +13,11 @@
       "Bash(git add *)",
       "Bash(git commit -q -m ' *)",
       "Bash(node -e \"const m=require\\('./dist/manifest.json'\\); console.log\\('content_scripts:', JSON.stringify\\(m.content_scripts,null,2\\)\\); console.log\\('web_accessible_resources:', JSON.stringify\\(m.web_accessible_resources,null,2\\)\\);\")",
-      "Read(//Users/leehyunsoo/Desktop/**)"
+      "Read(//Users/leehyunsoo/Desktop/**)",
+      "Bash(node -e \"const m=require\\('./dist/manifest.json'\\); const loader=m.content_scripts[0].js[0]; const fs=require\\('fs'\\); const txt=fs.readFileSync\\('dist/'+loader,'utf8'\\); const mm=txt.match\\(/assets\\\\/[^\\\\\"']+\\\\.js/\\); console.log\\(mm[0]\\);\")",
+      "Bash(grep -oE 'assets/[A-Za-z0-9_.-]+\\\\.js' dist/__TRACKED_VAR__)",
+      "Bash(node -e \"const m=require\\('./dist/manifest.json'\\); console.log\\(m.web_accessible_resources[0].resources.filter\\(r=>r.endsWith\\('.js'\\)\\).join\\('\\\\n'\\)\\);\")",
+      "Bash(xargs -n1 basename)"
     ]
   }
 }

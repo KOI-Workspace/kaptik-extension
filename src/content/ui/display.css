@@ -55,7 +55,6 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
   padding: 0 5%;
   pointer-events: none;
 }
@@ -64,14 +63,57 @@
   right: var(--panel-width);
 }
 
+/* 자막을 담는 단일 검은 배경 박스 (투명도 조절 가능) */
+.kaptik-center-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(900px, 100%);
+  background: rgba(0, 0, 0, var(--overlay-opacity, 0.6));
+  border-radius: 14px;
+  padding: calc(11px * var(--font-scale, 1)) calc(16px * var(--font-scale, 1));
+  pointer-events: auto; /* 핸들 드래그를 받기 위해 */
+  animation: kaptik-rise 150ms ease-out;
+}
+
+/* 상단 리사이즈 핸들 — 위/아래로 드래그해 줄 수 조절 */
+.kaptik-center-handle {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.kaptik-center-handle::before {
+  content: "";
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  transition: background 140ms ease-out, width 140ms ease-out;
+}
+
+.kaptik-center-handle:hover::before {
+  background: rgba(255, 255, 255, 0.9);
+  width: 52px;
+}
+
 .kaptik-center-line {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  max-width: min(820px, 100%);
-  opacity: 0.55;
+  opacity: 0.5;
   transition: opacity 160ms ease-out;
-  animation: kaptik-rise 150ms ease-out;
 }
 
 .kaptik-center-line.is-active {
@@ -82,12 +124,6 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: rgba(0, 0, 0, 0.58);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  padding: calc(8px * var(--font-scale, 1)) calc(13px * var(--font-scale, 1));
 }
 
 .kaptik-center-name {
@@ -102,7 +138,7 @@
   line-height: 1.34;
   letter-spacing: -0.015em;
   color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   word-break: keep-all;
 }
 
@@ -117,9 +153,11 @@
 
 /* 도킹 모드: YouTube 사이드 컬럼에 끼워진 일반 블록 (관련영상 위) */
 .kaptik-panel--docked {
-  position: relative; /* Latest 버튼 기준 */
+  /* sticky로 스크롤 시 영상 옆에 머무르게 한다 (Latest 버튼 기준점이기도 함) */
+  position: sticky;
+  top: 88px;
   width: 100%;
-  height: clamp(420px, calc(100vh - 148px), 860px);
+  height: clamp(420px, calc(100vh - 120px), 820px);
   margin-bottom: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;

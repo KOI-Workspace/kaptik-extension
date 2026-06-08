@@ -314,6 +314,24 @@ function AvailableView({
             onChange={(e) => patch({ fontScale: Number(e.target.value) })}
           />
         </div>
+
+        <div className="row slider-row">
+          <div className="slider-head">
+            <span className="row-label">{t.bgOpacityLabel}</span>
+            <span className="slider-value">
+              {Math.round(settings.overlayOpacity * 100)}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={settings.overlayOpacity}
+            aria-label={t.bgOpacityLabel}
+            onChange={(e) => patch({ overlayOpacity: Number(e.target.value) })}
+          />
+        </div>
       </div>
     </>
   );

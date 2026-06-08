@@ -20,7 +20,8 @@
       "Bash(xargs -n1 basename)",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")",
       "Bash(npx tsc *)",
-      "Bash(echo \"=== exit: $? ===\")"
+      "Bash(echo \"=== exit: $? ===\")",
+      "Bash(node -e \"const m=require\\('./dist/manifest.json'\\); console.log\\('matches:', JSON.stringify\\(m.content_scripts?.map\\(c=>c.matches\\)\\)\\); console.log\\('host_permissions:', JSON.stringify\\(m.host_permissions\\)\\); console.log\\('permissions:', JSON.stringify\\(m.permissions\\)\\); console.log\\('js:', JSON.stringify\\(m.content_scripts?.map\\(c=>c.js\\)\\)\\);\")"
     ]
   }
 }

@@ -3,25 +3,26 @@ import type {
   RequestMessage,
   ResponseMessage,
 } from "@/shared/messaging";
-import type { Platform, SubtitleCue, SubtitleStatus, SubtitleTrack } from "@/types/subtitle";
+import type { Platform, SubtitleCue, SubtitleTrack } from "@/types/subtitle";
 import {
-  fetchSubtitleStatus,
   fetchSubtitleTrack,
-  requestGeneration,
+  createJob,
 } from "@/api/client";
 import { getSettings } from "@/shared/settings";
 import {
-  completeLocalJob,
   getLocalStatus,
-  startLocalJob,
 } from "./generationStore";
 import { StreamingSession } from "@/api/wsClient";
+import { getYtCookies, getPoToken } from "./ytCredentials";
 
 /** 자막 트랙 메모리 캐시 (서비스 워커 생존 동안 유효) */
 const trackCache = new Map<string, SubtitleTrack>();
 
 /** tabId → 현재 스트리밍 세션 + 누적 cue 배열 */
 const streamingSessions = new Map<number, { session: StreamingSession; cues: SubtitleCue[] }>();
+
+/** jobId → 진행 모니터링 WebSocket */
+const jobSockets = new Map<string, WebSocket>();
 
 function cacheKey(platform: string, videoId: string): string {
   return `${platform}:${videoId}`;
@@ -46,14 +47,8 @@ async function handleGetStatus(
   platform: Platform,
   videoId: string,
 ): Promise<ResponseMessage> {
-  let status: SubtitleStatus;
-  try {
-    // 1순위: 실제 백엔드
-    status = await fetchSubtitleStatus(platform, videoId);
-  } catch {
-    // 폴백: 로컬 시뮬레이션
-    status = await getLocalStatus(platform, videoId);
-  }
+  // 폴백: 로컬 시뮬레이션 (실제 백엔드는 ws-job으로 진행 추적)
+  const status = await getLocalStatus(platform, videoId);
   return { type: "STATUS_OK", status };
 }
 
@@ -62,33 +57,72 @@ async function handleStartGeneration(
   platform: Platform,
   videoId: string,
 ): Promise<ResponseMessage> {
-  let etaSeconds: number;
+  const settings = await getSettings();
+  const { serverUrl, authToken, language } = settings;
+
+  // YouTube만 지원 (타 플랫폼은 라이브 스트리밍 경로)
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+
+  const [ytCookies, poToken] = await Promise.all([getYtCookies(), getPoToken()]);
+
+  let jobId: string;
   try {
-    // 실제 백엔드가 있으면 eta를 받아옴
-    const result = await requestGeneration(platform, videoId);
-    etaSeconds = result.etaSeconds;
-    await startLocalJob(platform, videoId, etaSeconds * 1000);
-  } catch {
-    // 폴백: 로컬 작업 시작 (기본 소요 시간)
-    etaSeconds = await startLocalJob(platform, videoId);
+    const result = await createJob({ serverUrl, authToken, url, targetLang: language, ytCookies, poToken });
+    jobId = result.jobId;
+  } catch (e) {
+    console.error("[Kaptik BG] Job 생성 실패:", e);
+    return { type: "ERR", error: e instanceof Error ? e.message : "Job 생성 실패" };
   }
 
-  // 완료 시점에 알림/브로드캐스트 (서비스 워커는 작업 직후 살아있으므로 setTimeout으로 충분)
-  setTimeout(() => {
-    void onGenerationComplete(platform, videoId);
-  }, etaSeconds * 1000 + 200);
-
-  return { type: "GENERATION_STARTED", etaSeconds };
+  openJobSocket(jobId, platform, videoId, serverUrl, authToken);
+  return { type: "GENERATION_STARTED", etaSeconds: 0 };
 }
 
-/** 생성 완료 처리: 상태 전이 + 알림 + 탭 브로드캐스트 */
+/** /ws-job/{jobId} WebSocket을 열어 진행 상황을 모니터링한다. */
+function openJobSocket(
+  jobId: string,
+  platform: Platform,
+  videoId: string,
+  serverUrl: string,
+  authToken: string,
+): void {
+  const token = authToken ? `?token=${encodeURIComponent(authToken)}` : "";
+  const ws = new WebSocket(`${serverUrl}/ws-job/${jobId}${token}`);
+  jobSockets.set(jobId, ws);
+
+  ws.onmessage = (e: MessageEvent<string>) => {
+    try {
+      const msg = JSON.parse(e.data) as Record<string, unknown>;
+      if (msg.type === "progress") {
+        console.info(`[Kaptik BG] Job ${jobId} 진행: step=${String(msg.step ?? "")} pct=${String(msg.pct ?? 0)}`);
+      } else if (msg.type === "done") {
+        console.info(`[Kaptik BG] Job ${jobId} 완료 total_cues=${String(msg.total_cues ?? 0)}`);
+        ws.close();
+        jobSockets.delete(jobId);
+        void onGenerationComplete(platform, videoId);
+      } else if (msg.type === "error") {
+        console.error(`[Kaptik BG] Job ${jobId} 오류:`, String(msg.message ?? ""));
+        ws.close();
+        jobSockets.delete(jobId);
+      }
+    } catch { /* malformed JSON */ }
+  };
+
+  ws.onerror = () => {
+    console.error(`[Kaptik BG] Job socket 오류 jobId=${jobId}`);
+    jobSockets.delete(jobId);
+  };
+
+  ws.onclose = () => {
+    jobSockets.delete(jobId);
+  };
+}
+
+/** 생성 완료 처리: 알림 + 탭 브로드캐스트 */
 async function onGenerationComplete(
   platform: Platform,
   videoId: string,
 ): Promise<void> {
-  const newlyDone = await completeLocalJob(platform, videoId);
-  if (!newlyDone) return; // 이미 처리됨 (중복 방지)
-
   const settings = await getSettings();
   if (settings.notifyOnReady) {
     chrome.notifications.create(`kaptik:${platform}:${videoId}`, {
@@ -124,13 +158,24 @@ async function broadcastReady(platform: Platform, videoId: string): Promise<void
 
 // ── 스트리밍 세션 관리 ────────────────────────────────────
 
-function handleStartStreaming(
+async function handleStartStreaming(
   tabId: number,
   youtubeUrl: string,
   seekSec: number,
   serverUrl: string,
   keepCues: boolean,
-): ResponseMessage {
+): Promise<ResponseMessage> {
+  const settings = await getSettings();
+  const { authToken, language } = settings;
+
+  // onDone → broadcastReady 용으로 videoId 추출
+  let videoId: string;
+  try {
+    videoId = new URL(youtubeUrl).searchParams.get("v") ?? youtubeUrl;
+  } catch {
+    videoId = youtubeUrl;
+  }
+
   const prev = streamingSessions.get(tabId);
   prev?.session.disconnect();
 
@@ -140,6 +185,8 @@ function handleStartStreaming(
     youtubeUrl,
     seekSec,
     serverUrl,
+    authToken,
+    language,
     (newCue) => {
       cues.push(newCue);
       cues.sort((a, b) => a.start - b.start);
@@ -156,6 +203,10 @@ function handleStartStreaming(
       console.error(`[Kaptik BG] 스트리밍 오류 tabId=${tabId}:`, err);
       const msg: BroadcastMessage = { type: "STREAMING_ERROR", message: err };
       chrome.tabs.sendMessage(tabId, msg).catch(() => {});
+    },
+    (totalCues) => {
+      console.info(`[Kaptik BG] 스트리밍 완료 tabId=${tabId} totalCues=${totalCues}`);
+      void broadcastReady("youtube", videoId);
     },
   );
 
@@ -189,7 +240,7 @@ chrome.runtime.onMessage.addListener(
           case "START_STREAMING": {
             const tabId = sender.tab?.id;
             if (!tabId) return { type: "ERR", error: "tabId 없음" };
-            return handleStartStreaming(
+            return await handleStartStreaming(
               tabId,
               message.youtubeUrl,
               message.seekSec,

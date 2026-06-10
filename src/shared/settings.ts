@@ -3,6 +3,17 @@ import type { LanguageCode } from "@/types/subtitle";
 /** 결제 등급 — free(미결제) / basic / pro */
 export type PlanTier = "free" | "basic" | "pro";
 
+/** JWT payload에서 plan 필드를 추출한다. 유효하지 않으면 "free" 반환. */
+export function decodeTokenPlan(token: string): PlanTier {
+  try {
+    const segment = token.split(".")[1];
+    if (!segment) return "free";
+    const payload = JSON.parse(atob(segment.replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
+    if (payload.plan === "basic" || payload.plan === "pro") return payload.plan;
+  } catch { /* invalid token */ }
+  return "free";
+}
+
 /** 사용자 자막 설정 */
 export interface KaptikSettings {
   /** 자막 표시 on/off (마스터 토글 — '자막 보기'가 켬) */
@@ -27,6 +38,8 @@ export interface KaptikSettings {
   profileName: string;
   /** 스트리밍 백엔드 WebSocket 서버 URL */
   serverUrl: string;
+  /** 백엔드 JWT 인증 토큰 — 빈 문자열이면 미로그인 */
+  authToken: string;
 }
 
 /** 유료 등급(basic/pro) 여부 — 미결제(free)와 결제 후를 구분 */
@@ -50,6 +63,7 @@ export const DEFAULT_SETTINGS: KaptikSettings = {
   plan: "free",
   profileName: "Jiwoo Kim",
   serverUrl: "ws://localhost:8000",
+  authToken: "",
 };
 
 /** 결제/업그레이드 페이지 URL (백엔드 연동 전 placeholder) */

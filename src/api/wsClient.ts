@@ -14,12 +14,16 @@ export class StreamingSession {
     private videoUrl: string,
     private seekSec: number,
     private serverUrl: string,
+    private authToken: string,
+    private targetLang: string,
     private onCueReady: (cue: SubtitleCue) => void,
     private onError: (msg: string) => void,
+    private onDone?: (totalCues: number) => void,
   ) {}
 
   connect(): void {
-    const url = `${this.serverUrl}/ws-youtube/${this.sessionId}`;
+    const token = this.authToken ? `?token=${encodeURIComponent(this.authToken)}` : "";
+    const url = `${this.serverUrl}/ws-youtube/${this.sessionId}${token}`;
     try {
       this.ws = new WebSocket(url);
     } catch {
@@ -28,11 +32,11 @@ export class StreamingSession {
     }
 
     this.ws.onopen = () => {
-      console.info(`[Kaptik WS] 연결됨 → ${url} (seek=${this.seekSec}s)`);
+      console.info(`[Kaptik WS] 연결됨 → ${this.serverUrl}/ws-youtube/${this.sessionId} (seek=${this.seekSec}s)`);
       this.ws!.send(
         JSON.stringify({
           url: this.videoUrl,
-          target_lang: "en",
+          target_lang: this.targetLang,
           seek_sec: this.seekSec,
           duration_sec: 0,
         }),
@@ -74,7 +78,9 @@ export class StreamingSession {
       return;
     }
     if (msg.type === "done") {
-      console.info(`[Kaptik WS] done — total_cues=${String(msg.total_cues ?? 0)}`);
+      const totalCues = Number(msg.total_cues ?? 0);
+      console.info(`[Kaptik WS] done — total_cues=${totalCues}`);
+      this.onDone?.(totalCues);
       return;
     }
     if (msg.type === "error") {

@@ -4,9 +4,9 @@ import {
   getSettings,
   updateSettings,
   isPaid,
+  decodeTokenPlan,
   PRICING_URL,
   type KaptikSettings,
-  type PlanTier,
 } from "@/shared/settings";
 import { getMessages, UI_LANGUAGE_OPTIONS, type Messages } from "@/shared/i18n";
 import { resolveAdapter } from "@/content/siteAdapters";
@@ -98,22 +98,27 @@ export function Popup() {
           <div className="popup-subtitle">{t.appTagline}</div>
         </div>
         <div className="popup-header-right">
-          {isPaid(settings.plan) ? (
-            // 결제 후: 요금제 칩 + 프로필 아바타 (서로 분리된 요소)
-            <div className="account">
-              <span className={"plan-chip plan-" + settings.plan}>
-                {settings.plan === "pro" ? t.planPro : t.planBasic}
-              </span>
-              <span className="account-avatar" title={settings.profileName}>
-                {settings.profileName.trim().charAt(0).toUpperCase()}
-              </span>
-            </div>
-          ) : (
-            // 미결제: 결제하러 가기
-            <button type="button" className="pro-badge" onClick={openPricing}>
-              🔒 {t.ctaUnlock}
-            </button>
-          )}
+          {(() => {
+            const effectivePlan = settings.authToken
+              ? decodeTokenPlan(settings.authToken)
+              : settings.plan;
+            return isPaid(effectivePlan) ? (
+              // 결제 후: 요금제 칩 + 프로필 아바타
+              <div className="account">
+                <span className={"plan-chip plan-" + effectivePlan}>
+                  {effectivePlan === "pro" ? t.planPro : t.planBasic}
+                </span>
+                <span className="account-avatar" title={settings.profileName}>
+                  {settings.profileName.trim().charAt(0).toUpperCase()}
+                </span>
+              </div>
+            ) : (
+              // 미로그인 또는 무료: 결제하러 가기
+              <button type="button" className="pro-badge" onClick={openPricing}>
+                🔒 {t.ctaUnlock}
+              </button>
+            );
+          })()}
           {target && (
             <Switch
               checked={settings.enabled}
@@ -299,21 +304,6 @@ function AvailableView({
           />
         </div>
 
-        {/* 개발용: 결제 등급을 직접 바꿔 미결제/Basic/Pro 화면을 확인 */}
-        <div className="row">
-          <span className="row-label row-dev">{t.planTestLabel}</span>
-          <select
-            className="select"
-            value={settings.plan}
-            aria-label={t.planTestLabel}
-            onChange={(e) => patch({ plan: e.target.value as PlanTier })}
-          >
-            <option value="free">Free</option>
-            <option value="basic">Basic</option>
-            <option value="pro">Pro</option>
-          </select>
-        </div>
-
         {/* 개발용: 스트리밍 백엔드 서버 URL */}
         <div className="row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
           <span className="row-label row-dev">Server URL (dev)</span>
@@ -324,6 +314,19 @@ function AvailableView({
             value={settings.serverUrl}
             placeholder="ws://localhost:8000"
             onChange={(e) => patch({ serverUrl: e.target.value })}
+          />
+        </div>
+
+        {/* 개발용: JWT 인증 토큰 (POST /auth/dev-token 으로 발급) */}
+        <div className="row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+          <span className="row-label row-dev">Auth Token (dev)</span>
+          <input
+            type="text"
+            className="select"
+            style={{ width: "100%", boxSizing: "border-box" }}
+            value={settings.authToken}
+            placeholder="eyJ... (dev-token)"
+            onChange={(e) => patch({ authToken: e.target.value })}
           />
         </div>
       </div>

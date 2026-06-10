@@ -1,110 +1,64 @@
 import type {
   Annotation,
-  LanguageCode,
-  Member,
   Platform,
-  SubtitleCue,
   SubtitleStatus,
   SubtitleTrack,
 } from "@/types/subtitle";
 import { getMockTrack } from "./mockSubtitles";
 
-/** Kaptik 백엔드 베이스 URL (개발 중 — 미연결 시 mock/시뮬레이션으로 대체) */
-const API_BASE = "https://api.kaptik.app/v1";
-
 /** API 호출 타임아웃(ms) */
 const TIMEOUT_MS = 6000;
 
-/** 알려진 언어 코드 집합 (응답 정규화에 사용) */
-const KNOWN_LANGUAGES: LanguageCode[] = ["ko", "en", "ja", "zh-CN", "id"];
+/** ws(s):// → http(s):// 변환. REST API 호출에 사용. */
+export function wsUrlToHttp(url: string): string {
+  return url.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
+}
 
-/** 서버가 내려줄 것으로 기대하는 원시 큐 형태 (언어 코드가 평면 키로 올 수 있음) */
-type RawCue = {
-  start: number;
-  end: number;
-  speaker?: string;
-  speakerId?: string;
-  contextNote?: string;
-  annotations?: Annotation[];
-  text?: Partial<Record<LanguageCode, string>>;
-} & Partial<Record<LanguageCode, string>>;
+/** 백엔드 Job API 응답 타입 */
+export interface JobResponse {
+  job_id: string;
+  user_id: string;
+  url: string;
+  target_lang: string;
+  status: "pending" | "processing" | "done" | "failed";
+  step: string | null;
+  progress: number;
+  total_cues: number;
+  error: string | null;
+  created_at: number;
+  cues?: Array<{
+    cue_id: string;
+    text_ko: string;
+    text_en: string;
+    start_ms: number;
+    end_ms: number;
+    speaker: string;
+    annotations: Annotation[];
+  }>;
+}
 
-type RawTrackResponse = {
-  platform?: Platform;
-  videoId?: string;
-  cues: RawCue[];
-  availableLanguages?: LanguageCode[];
-  members?: Record<string, Member>;
-  isLive?: boolean;
-};
-
-/** fetch에 타임아웃을 적용한 래퍼 */
-async function fetchJson<T>(path: string): Promise<T> {
+/** fetch에 타임아웃과 선택적 Bearer 인증을 적용한 래퍼 */
+async function fetchJson<T>(
+  url: string,
+  opts: { method?: string; body?: unknown; authToken?: string } = {},
+): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (opts.authToken) headers["Authorization"] = `Bearer ${opts.authToken}`;
+  if (opts.body) headers["Content-Type"] = "application/json";
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetch(url, {
+      method: opts.method ?? "GET",
       signal: controller.signal,
-      headers: { Accept: "application/json" },
+      headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
   }
-}
-
-/** 이름을 멤버 id로 변환 (slug) */
-function toMemberId(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-/** 평면/중첩 응답을 SubtitleCue 로 정규화하고, 필요한 멤버를 수집한다. */
-function normalizeCue(
-  raw: RawCue,
-  members: Record<string, Member>,
-): SubtitleCue {
-  const text: Partial<Record<LanguageCode, string>> = { ...(raw.text ?? {}) };
-  for (const lang of KNOWN_LANGUAGES) {
-    const flat = raw[lang];
-    if (typeof flat === "string" && text[lang] === undefined) {
-      text[lang] = flat;
-    }
-  }
-
-  // 화자: speakerId 우선, 없으면 speaker 이름을 slug 처리
-  let speakerId = raw.speakerId;
-  if (!speakerId && raw.speaker) {
-    speakerId = toMemberId(raw.speaker);
-    if (!members[speakerId]) {
-      members[speakerId] = { id: speakerId, name: raw.speaker, color: "#7E8AFF" };
-    }
-  }
-
-  // 주석: annotations 우선, 없으면 contextNote를 단일 주석으로 변환
-  const annotations: Annotation[] = raw.annotations ? [...raw.annotations] : [];
-  if (!raw.annotations && raw.contextNote) {
-    annotations.push({ title: "맥락", description: raw.contextNote });
-  }
-
-  return {
-    start: raw.start,
-    end: raw.end,
-    speakerId,
-    text,
-    annotations: annotations.length ? annotations : undefined,
-  };
-}
-
-/** 응답에서 실제 제공되는 언어 목록을 추론한다. */
-function deriveLanguages(cues: SubtitleCue[]): LanguageCode[] {
-  const set = new Set<LanguageCode>();
-  for (const cue of cues) {
-    for (const lang of Object.keys(cue.text) as LanguageCode[]) {
-      if (cue.text[lang]) set.add(lang);
-    }
-  }
-  return KNOWN_LANGUAGES.filter((l) => set.has(l));
 }
 
 /**
@@ -115,29 +69,8 @@ export async function fetchSubtitleTrack(
   platform: Platform,
   videoId: string,
 ): Promise<SubtitleTrack> {
-  try {
-    const data = await fetchJson<RawTrackResponse>(
-      `/subtitles?platform=${encodeURIComponent(platform)}&videoId=${encodeURIComponent(videoId)}`,
-    );
-    const members: Record<string, Member> = { ...(data.members ?? {}) };
-    const cues = (data.cues ?? [])
-      .map((c) => normalizeCue(c, members))
-      .sort((a, b) => a.start - b.start);
-    return {
-      platform,
-      videoId,
-      cues,
-      availableLanguages: data.availableLanguages ?? deriveLanguages(cues),
-      members,
-      isLive: data.isLive,
-    };
-  } catch (error) {
-    console.info(
-      `[Kaptik] API 미연결 또는 오류로 mock 자막 사용 (${platform}/${videoId})`,
-      error instanceof Error ? error.message : error,
-    );
-    return getMockTrack(platform, videoId);
-  }
+  console.info(`[Kaptik] fetchSubtitleTrack mock fallback (${platform}/${videoId})`);
+  return getMockTrack(platform, videoId);
 }
 
 /**
@@ -148,32 +81,45 @@ export async function fetchSubtitleStatus(
   platform: Platform,
   videoId: string,
 ): Promise<SubtitleStatus> {
-  return fetchJson<SubtitleStatus>(
-    `/subtitles/status?platform=${encodeURIComponent(platform)}&videoId=${encodeURIComponent(videoId)}`,
-  );
+  // 현재 미사용 — 상태 조회는 generationStore 또는 ws-job으로 처리
+  throw new Error(`fetchSubtitleStatus: not implemented (${platform}/${videoId})`);
 }
 
 /**
- * 자막 생성을 요청한다.
- * 백엔드 미연결 시 throw 하여, 호출 측이 로컬 시뮬레이션으로 폴백하도록 한다.
- * @returns 예상 소요 시간(초)
+ * POST /jobs — 자막 생성 Job을 생성한다.
+ * @returns job_id
  */
-export async function requestGeneration(
-  platform: Platform,
-  videoId: string,
-): Promise<{ etaSeconds: number }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(`${API_BASE}/subtitles/generate`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ platform, videoId }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as { etaSeconds: number };
-  } finally {
-    clearTimeout(timer);
-  }
+export async function createJob(opts: {
+  serverUrl: string;
+  authToken: string;
+  url: string;
+  targetLang: string;
+  ytCookies?: chrome.cookies.Cookie[];
+  poToken?: string;
+}): Promise<{ jobId: string }> {
+  const base = wsUrlToHttp(opts.serverUrl);
+  const body: Record<string, unknown> = {
+    url: opts.url,
+    target_lang: opts.targetLang,
+  };
+  if (opts.ytCookies?.length) body.yt_cookies = opts.ytCookies;
+  if (opts.poToken) body.po_token = opts.poToken;
+
+  const res = await fetchJson<{ job_id: string }>(
+    `${base}/jobs`,
+    { method: "POST", body, authToken: opts.authToken },
+  );
+  return { jobId: res.job_id };
+}
+
+/**
+ * GET /jobs/{jobId} — Job 상태 및 결과를 조회한다.
+ */
+export async function fetchJob(opts: {
+  serverUrl: string;
+  authToken: string;
+  jobId: string;
+}): Promise<JobResponse> {
+  const base = wsUrlToHttp(opts.serverUrl);
+  return fetchJson<JobResponse>(`${base}/jobs/${opts.jobId}`, { authToken: opts.authToken });
 }

@@ -203,4 +203,38 @@ class SubtitleController {
   }
 }
 
+// YouTube 페이지의 PO Token을 page context JS에서 읽어 background에 반환.
+// content script는 isolated world이므로 <script> 주입 + postMessage 방식 사용.
+chrome.runtime.onMessage.addListener(
+  (message: unknown, _sender, sendResponse) => {
+    if ((message as Record<string, unknown>)?.type !== "GET_PO_TOKEN") return;
+
+    const RESPONSE_TYPE = "KAPTIK_PO_TOKEN_RESULT";
+    const handler = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      const data = event.data as Record<string, unknown>;
+      if (data?.type !== RESPONSE_TYPE) return;
+      window.removeEventListener("message", handler);
+      sendResponse(data.token ?? undefined);
+    };
+    window.addEventListener("message", handler);
+    setTimeout(() => {
+      window.removeEventListener("message", handler);
+      sendResponse(undefined);
+    }, 1000);
+
+    const script = document.createElement("script");
+    script.textContent = `(function(){
+      try{
+        const d=window.ytcfg&&window.ytcfg.data_||{};
+        const token=d.VISITOR_DATA||d.visitorData||undefined;
+        window.postMessage({type:"${RESPONSE_TYPE}",token},"*");
+      }catch(e){window.postMessage({type:"${RESPONSE_TYPE}",token:undefined},"*");}
+    })();`;
+    (document.head ?? document.documentElement).appendChild(script);
+    script.remove();
+    return true; // 비동기 sendResponse
+  },
+);
+
 void bootstrap();

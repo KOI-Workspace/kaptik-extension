@@ -44,7 +44,7 @@ export default defineManifest({
       all_frames: false,
     },
   ],
-  permissions: ["storage", "notifications", "tabs"],
+  permissions: ["storage", "notifications", "tabs", "cookies"],
   host_permissions: [
     "*://*.youtube.com/*",
     "*://*.weverse.io/*",

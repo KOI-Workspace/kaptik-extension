@@ -417,6 +417,30 @@ input[type="range"]::-webkit-slider-thumb {
   transform: scale(0.98);
 }
 
+/* ── 생성 단계 레이블 ── */
+.state-step {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-brand);
+  margin-bottom: 2px;
+}
+
+/* ── 알림 토글 행 (생성 중 화면) ── */
+.notify-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.notify-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
 /* ── 진행률 ── */
 .progress {
   width: 100%;

@@ -21,6 +21,10 @@ interface Job {
   videoId: string;
   startedAt: number;
   durationMs: number;
+  /** 백엔드 ws-job 진행 메시지에서 수신한 실제 진행률 (0~1) */
+  pct?: number;
+  /** 백엔드 ws-job 진행 메시지에서 수신한 현재 단계 */
+  step?: string;
 }
 
 function keyOf(platform: Platform, videoId: string): string {
@@ -78,8 +82,9 @@ export async function getLocalStatus(
   }
   return {
     state: "generating",
-    etaSeconds: Math.ceil((job.durationMs - elapsed) / 1000),
-    progress: Math.min(0.99, elapsed / job.durationMs),
+    etaSeconds: Math.max(0, Math.ceil((job.durationMs - elapsed) / 1000)),
+    progress: job.pct ?? Math.min(0.99, elapsed / job.durationMs),
+    step: job.step,
   };
 }
 
@@ -98,6 +103,23 @@ export async function startLocalJob(
   jobs[key] = { platform, videoId, startedAt: Date.now(), durationMs };
   await writeJobs(jobs);
   return Math.ceil(durationMs / 1000);
+}
+
+/**
+ * ws-job 진행 메시지로 수신한 실제 진행률과 단계를 저장한다.
+ */
+export async function updateJobProgress(
+  platform: Platform,
+  videoId: string,
+  step: string,
+  pct: number,
+): Promise<void> {
+  const key = keyOf(platform, videoId);
+  const jobs = await readJobs();
+  if (jobs[key]) {
+    jobs[key] = { ...jobs[key], step, pct };
+    await writeJobs(jobs);
+  }
 }
 
 /**

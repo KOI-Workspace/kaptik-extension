@@ -77,5 +77,5 @@ export interface SubtitleTrack {
 export type SubtitleStatus =
   | { state: "available"; isLive?: boolean }
   | { state: "none" }
-  | { state: "generating"; etaSeconds: number; progress: number }
+  | { state: "generating"; etaSeconds: number; progress: number; step?: string }
   | { state: "failed"; reason?: string };

@@ -11,6 +11,9 @@ import {
 import { getSettings } from "@/shared/settings";
 import {
   getLocalStatus,
+  startLocalJob,
+  updateJobProgress,
+  completeLocalJob,
 } from "./generationStore";
 import { StreamingSession } from "@/api/wsClient";
 import { getYtCookies, getPoToken } from "./ytCredentials";
@@ -74,8 +77,11 @@ async function handleStartGeneration(
     return { type: "ERR", error: e instanceof Error ? e.message : "Job 생성 실패" };
   }
 
+  // 로컬 상태를 generating으로 전이 — 팝업 폴링이 즉시 반영되도록
+  const etaSeconds = await startLocalJob(platform, videoId);
+
   openJobSocket(jobId, platform, videoId, serverUrl, authToken);
-  return { type: "GENERATION_STARTED", etaSeconds: 0 };
+  return { type: "GENERATION_STARTED", etaSeconds };
 }
 
 /** /ws-job/{jobId} WebSocket을 열어 진행 상황을 모니터링한다. */
@@ -94,11 +100,15 @@ function openJobSocket(
     try {
       const msg = JSON.parse(e.data) as Record<string, unknown>;
       if (msg.type === "progress") {
-        console.info(`[Kaptik BG] Job ${jobId} 진행: step=${String(msg.step ?? "")} pct=${String(msg.pct ?? 0)}`);
+        const step = String(msg.step ?? "");
+        const pct = Number(msg.pct ?? 0);
+        console.info(`[Kaptik BG] Job ${jobId} 진행: step=${step} pct=${pct}`);
+        void updateJobProgress(platform, videoId, step, pct);
       } else if (msg.type === "done") {
         console.info(`[Kaptik BG] Job ${jobId} 완료 total_cues=${String(msg.total_cues ?? 0)}`);
         ws.close();
         jobSockets.delete(jobId);
+        void completeLocalJob(platform, videoId);
         void onGenerationComplete(platform, videoId);
       } else if (msg.type === "error") {
         console.error(`[Kaptik BG] Job ${jobId} 오류:`, String(msg.message ?? ""));

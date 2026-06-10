@@ -39,6 +39,8 @@ class SubtitleController {
     video: HTMLVideoElement;
   } | null = null;
   private videoCleanup: (() => void) | null = null;
+  /** evaluate() 안에서 정의된 startStreaming을 외부(메시지 핸들러)에서도 호출 가능하도록 저장 */
+  private startStreamingFn: ((seekSec: number, keepCues?: boolean) => void) | null = null;
   /** 평가 진행 중 플래그 — 긴 await 동안 중복 evaluate가 끼어들어 취소시키는 것을 방지 */
   private evaluating = false;
 
@@ -62,7 +64,16 @@ class SubtitleController {
         message?.type === "SUBTITLES_READY" &&
         message.platform === this.adapter.platform
       ) {
-        void this.evaluate();
+        if (
+          this.mounted &&
+          this.startStreamingFn &&
+          this.mounted.videoId === message.videoId
+        ) {
+          // 이미 마운트된 상태 → 생성 완료 후 현재 재생 위치부터 스트리밍 재시작
+          this.startStreamingFn(Math.floor(this.mounted.video.currentTime));
+        } else {
+          void this.evaluate();
+        }
       } else if (message?.type === "CUE_READY") {
         this.mounted?.handle.updateCues(message.cues);
       } else if (message?.type === "STREAMING_ERROR") {
@@ -151,6 +162,7 @@ class SubtitleController {
         }).catch((err: unknown) => console.error("[Kaptik] START_STREAMING 실패:", err));
         console.info(`[Kaptik] 스트리밍 요청 (${videoId}, seek=${seekSec}s, keepCues=${keepCues})`);
       };
+      this.startStreamingFn = startStreaming;
 
       startStreaming(Math.floor(video.currentTime));
 
@@ -195,6 +207,7 @@ class SubtitleController {
   private teardown() {
     this.videoCleanup?.();
     this.videoCleanup = null;
+    this.startStreamingFn = null;
     if (this.mounted) {
       chrome.runtime.sendMessage({ type: "STOP_STREAMING" }).catch(() => {});
     }

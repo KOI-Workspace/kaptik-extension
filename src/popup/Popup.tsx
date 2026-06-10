@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DEFAULT_SETTINGS,
   getSettings,
@@ -11,9 +11,14 @@ import {
 import { getMessages, UI_LANGUAGE_OPTIONS, type Messages } from "@/shared/i18n";
 import { resolveAdapter } from "@/content/siteAdapters";
 import {
+  requestStatus,
+  startGeneration,
+} from "@/shared/messaging";
+import {
   LANGUAGE_LABELS,
   type LanguageCode,
   type Platform,
+  type SubtitleStatus,
 } from "@/types/subtitle";
 
 /** 현재 탭에서 식별된 영상 */
@@ -49,6 +54,9 @@ export function Popup() {
   // undefined: 확인 중, null: 지원 안 함, Target: 영상 식별됨
   const [target, setTarget] = useState<Target | null | undefined>(undefined);
   const [settings, setSettings] = useState<KaptikSettings>(DEFAULT_SETTINGS);
+  const [status, setStatus] = useState<SubtitleStatus>({ state: "none" });
+  // 2초 폴링 interval ID (cleanup용)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 선택 언어에 맞춰 UI 전체 텍스트를 현지화
   const t = getMessages(settings.language);
@@ -77,6 +85,29 @@ export function Popup() {
     return () => { active = false; };
   }, []);
 
+  // target이 확인되면 상태 폴링 시작
+  useEffect(() => {
+    if (!target) return;
+
+    let active = true;
+
+    const poll = async () => {
+      const s = await requestStatus(target.platform, target.videoId);
+      if (active && s) setStatus(s);
+    };
+
+    void poll();
+    pollIntervalRef.current = setInterval(() => { void poll(); }, 2000);
+
+    return () => {
+      active = false;
+      if (pollIntervalRef.current != null) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [target]);
+
   const patch = (next: Partial<KaptikSettings>) => {
     setSettings((prev) => ({ ...prev, ...next }));
     void updateSettings(next);
@@ -85,6 +116,16 @@ export function Popup() {
   /** 결제/업그레이드 페이지를 새 탭으로 연다. */
   const openPricing = () => {
     void chrome.tabs.create({ url: PRICING_URL });
+  };
+
+  const handleGenerate = () => {
+    if (!target) return;
+    setStatus({ state: "generating", etaSeconds: 120, progress: 0 });
+    void startGeneration(target.platform, target.videoId);
+  };
+
+  const handleRetry = () => {
+    setStatus({ state: "none" });
   };
 
   // ── 렌더 ──
@@ -119,7 +160,7 @@ export function Popup() {
               </button>
             );
           })()}
-          {target && (
+          {target && status.state === "available" && (
             <Switch
               checked={settings.enabled}
               onChange={(v) => patch({ enabled: v })}
@@ -132,8 +173,24 @@ export function Popup() {
       {target === undefined && <CheckingView t={t} />}
       {target === null && <UnsupportedView t={t} />}
 
-      {/* 지원 사이트이면 스트리밍 설정을 바로 표시 (REST status 불필요) */}
-      {target && (
+      {target && status.state === "none" && (
+        <NoneView t={t} onGenerate={handleGenerate} />
+      )}
+
+      {target && status.state === "generating" && (
+        <GeneratingView
+          t={t}
+          status={status}
+          notifyOnReady={settings.notifyOnReady}
+          onNotifyChange={(v) => patch({ notifyOnReady: v })}
+        />
+      )}
+
+      {target && status.state === "failed" && (
+        <FailedView t={t} onRetry={handleRetry} />
+      )}
+
+      {target && status.state === "available" && (
         <AvailableView
           settings={settings}
           patch={patch}
@@ -157,6 +214,76 @@ function UnsupportedView({ t }: { t: Messages }) {
       <div className="state-emoji">🎬</div>
       <div className="state-title">{t.unsupportedTitle}</div>
       <div className="state-desc">{t.unsupportedDesc}</div>
+    </div>
+  );
+}
+
+function NoneView({ t, onGenerate }: { t: Messages; onGenerate: () => void }) {
+  return (
+    <div className="state-block">
+      <div className="state-title">{t.noneTitle}</div>
+      <div className="state-desc">{t.noneDesc}</div>
+      <button type="button" className="btn-primary" onClick={onGenerate}>
+        {t.generateBtn}
+      </button>
+      <div className="state-note">{t.noneNote}</div>
+    </div>
+  );
+}
+
+/** 백엔드 step 값을 표시용 레이블로 변환 */
+const STEP_LABELS: Record<string, string> = {
+  analyze: "Analyzing link…",
+  captions: "Extracting captions…",
+  stt: "Transcribing audio…",
+  translate: "Translating…",
+};
+
+function GeneratingView({
+  t,
+  status,
+  notifyOnReady,
+  onNotifyChange,
+}: {
+  t: Messages;
+  status: { state: "generating"; etaSeconds: number; progress: number; step?: string };
+  notifyOnReady: boolean;
+  onNotifyChange: (v: boolean) => void;
+}) {
+  const pct = Math.round(status.progress * 100);
+  const stepLabel = status.step ? (STEP_LABELS[status.step] ?? status.step) : null;
+
+  return (
+    <div className="state-block">
+      <div className="state-title">{t.generatingTitle}</div>
+      {stepLabel && <div className="state-step">{stepLabel}</div>}
+      <div className="progress" style={{ width: "100%" }}>
+        <div className="progress-bar" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="progress-meta">
+        <span>{pct}%</span>
+        <span>{t.generatingEta(status.etaSeconds)}</span>
+      </div>
+      <div className="notify-row">
+        <span className="notify-label">{t.notifyLabel}</span>
+        <Switch
+          checked={notifyOnReady}
+          onChange={onNotifyChange}
+          ariaLabel={t.ariaNotifyReady}
+        />
+      </div>
+      <div className="state-note">{t.generatingNote}</div>
+    </div>
+  );
+}
+
+function FailedView({ t, onRetry }: { t: Messages; onRetry: () => void }) {
+  return (
+    <div className="state-block">
+      <div className="state-title">{t.failedTitle}</div>
+      <button type="button" className="btn-primary" onClick={onRetry}>
+        {t.retryBtn}
+      </button>
     </div>
   );
 }

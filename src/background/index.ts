@@ -4,6 +4,7 @@ import type {
   ResponseMessage,
 } from "@/shared/messaging";
 import type { Platform, SubtitleCue, SubtitleTrack } from "@/types/subtitle";
+import { resolveMemberByName } from "@/shared/members";
 import {
   fetchSubtitleTrack,
   createJob,
@@ -106,7 +107,8 @@ async function handleStartGeneration(
   videoId: string,
 ): Promise<ResponseMessage> {
   const settings = await getSettings();
-  const { serverUrl, authToken, language } = settings;
+  const { serverUrl, language, devMode } = settings;
+  const authToken = devMode ? "dev" : settings.authToken;
 
   // YouTube만 지원 (타 플랫폼은 라이브 스트리밍 경로)
   const url = `https://www.youtube.com/watch?v=${videoId}`;
@@ -218,9 +220,11 @@ async function handleStartLiveStreaming(
   platform: Platform,
   videoId: string,
   captureStartVideoTime: number,
+  videoTitle?: string,
 ): Promise<ResponseMessage> {
   const settings = await getSettings();
-  const { serverUrl, authToken, language } = settings;
+  const { serverUrl, language, devMode } = settings;
+  const authToken = devMode ? "dev" : settings.authToken;
 
   // 기존 라이브 세션 정리
   const prev = liveSessions.get(tabId);
@@ -270,6 +274,7 @@ async function handleStartLiveStreaming(
     serverUrl,
     authToken,
     targetLang: language,
+    videoTitle,
   }).catch(() => {});
 
   // 30초 후 아직 seek를 보내지 않았으면 SEEK_AND_SHOW 발송
@@ -307,6 +312,18 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
   if (!session) return;
 
   const offset = session.captureStartVideoTime;
+
+  if (data.type === "speaker_identified") {
+    const speakerId = String(data.speaker ?? "");
+    const name = String(data.name ?? "");
+    const member = resolveMemberByName(name);
+    if (member) {
+      console.info(`[Kaptik BG] 라이브 화자 식별 → tab ${tabId}: ${speakerId} = ${member.name}`);
+      const msg: BroadcastMessage = { type: "SPEAKER_IDENTIFIED", speakerId, name, member };
+      chrome.tabs.sendMessage(tabId, msg).catch(() => {});
+    }
+    return;
+  }
 
   if (data.stage === 1) {
     const ts = Number(data.ts);
@@ -359,7 +376,8 @@ async function handleStartStreaming(
   keepCues: boolean,
 ): Promise<ResponseMessage> {
   const settings = await getSettings();
-  const { authToken, language } = settings;
+  const { language, devMode } = settings;
+  const authToken = devMode ? "dev" : settings.authToken;
 
   // onDone → broadcastReady 용으로 videoId 추출
   let videoId: string;
@@ -400,6 +418,11 @@ async function handleStartStreaming(
     (totalCues) => {
       console.info(`[Kaptik BG] 스트리밍 완료 tabId=${tabId} totalCues=${totalCues}`);
       void broadcastReady("youtube", videoId);
+    },
+    (speakerId, name, member) => {
+      console.info(`[Kaptik BG] 화자 식별 → tab ${tabId}: ${speakerId} = ${member.name}`);
+      const msg: BroadcastMessage = { type: "SPEAKER_IDENTIFIED", speakerId, name, member };
+      chrome.tabs.sendMessage(tabId, msg).catch(() => {});
     },
   );
 
@@ -488,6 +511,7 @@ chrome.runtime.onMessage.addListener(
               req.platform,
               req.videoId,
               req.captureStartVideoTime,
+              req.videoTitle,
             );
           }
           case "STOP_LIVE_STREAMING": {

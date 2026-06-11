@@ -40,11 +40,20 @@ export interface KaptikSettings {
   serverUrl: string;
   /** 백엔드 JWT 인증 토큰 — 빈 문자열이면 미로그인 */
   authToken: string;
+  /** 개발 모드 — true이면 authToken 대신 "dev" 토큰 전송 */
+  devMode: boolean;
 }
 
 /** 유료 등급(basic/pro) 여부 — 미결제(free)와 결제 후를 구분 */
 export function isPaid(plan: PlanTier): boolean {
   return plan !== "free";
+}
+
+/** devMode / authToken / plan 순서로 실제 등급을 결정한다 */
+export function getEffectivePlan(settings: KaptikSettings): PlanTier {
+  if (settings.devMode) return "pro";
+  if (settings.authToken) return decodeTokenPlan(settings.authToken);
+  return settings.plan;
 }
 
 /** chrome.storage.sync 에 저장되는 키 */
@@ -64,6 +73,7 @@ export const DEFAULT_SETTINGS: KaptikSettings = {
   profileName: "Jiwoo Kim",
   serverUrl: "ws://localhost:8000",
   authToken: "",
+  devMode: false,
 };
 
 /** 결제/업그레이드 페이지 URL (백엔드 연동 전 placeholder) */

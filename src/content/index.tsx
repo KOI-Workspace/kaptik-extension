@@ -1,10 +1,12 @@
 import type { SiteAdapter } from "./siteAdapters";
 import { resolveAdapter } from "./siteAdapters";
 import type { BroadcastMessage } from "@/shared/messaging";
+import { requestStatus } from "@/shared/messaging";
 import {
   DEFAULT_SETTINGS,
   getSettings,
   onSettingsChanged,
+  getEffectivePlan,
   type KaptikSettings,
 } from "@/shared/settings";
 import { mountDisplay, type DisplayHandle } from "./ui/mount";
@@ -43,6 +45,10 @@ class SubtitleController {
   private startStreamingFn: ((seekSec: number, keepCues?: boolean) => void) | null = null;
   /** 평가 진행 중 플래그 — 긴 await 동안 중복 evaluate가 끼어들어 취소시키는 것을 방지 */
   private evaluating = false;
+  /** 30초 화자 식별 대기 타이머 */
+  private speakerIdTimer: number | undefined = undefined;
+  /** 현재 세션에서 화자 식별이 한 번이라도 성공했는지 */
+  private speakerIdentifiedOnce = false;
 
   constructor(private adapter: SiteAdapter) {}
 
@@ -76,6 +82,22 @@ class SubtitleController {
         }
       } else if (message?.type === "CUE_READY") {
         this.mounted?.handle.updateCues(message.cues);
+      } else if (message?.type === "SPEAKER_IDENTIFIED") {
+        if (this.mounted) {
+          // 화자 식별 성공 → 30s 타이머 해제, members 맵 업데이트
+          clearTimeout(this.speakerIdTimer);
+          this.speakerIdTimer = undefined;
+          this.speakerIdentifiedOnce = true;
+          // SPEAKER_N → 멤버, 한국어 이름 → 멤버, 영문 id/이름 → 멤버 모두 등록
+          // (백엔드가 해결 후 한국어 이름으로 speaker 필드를 바꾸므로 둘 다 필요)
+          this.mounted.handle.updateMembers({
+            [message.speakerId]: message.member,
+            [message.name]: message.member,
+            [message.member.id]: message.member,
+            [message.member.name]: message.member,
+          });
+          console.info(`[Kaptik] 화자 식별 반영: ${message.speakerId} → ${message.member.name}`);
+        }
       } else if (message?.type === "STREAMING_ERROR") {
         console.error("[Kaptik] 스트리밍 오류:", message.message);
       } else if (message?.type === "SEEK_AND_SHOW") {
@@ -117,12 +139,13 @@ class SubtitleController {
       // 사이드 컬럼(관련영상 영역) 또는 영상 아래 — 화면 폭에 따라 달라진다(반응형)
       const panelContainer = this.adapter.getPanelContainer();
 
-      // 같은 영상, 같은 패널, 같은 video 요소면 유지
-      // YouTube SPA가 video 요소를 교체하면 stale ref → 재마운트
+      // 같은 영상, 같은 패널이면 유지 (video 요소가 일시적으로 null이어도 세션 유지)
+      // YouTube SPA가 video 요소를 새 인스턴스로 교체한 경우에만 재마운트
+      const currentVideo = this.adapter.getVideoElement();
       if (
         this.mounted?.videoId === videoId &&
         this.mounted.panelContainer === panelContainer &&
-        this.mounted.video === this.adapter.getVideoElement()
+        (this.mounted.video === currentVideo || currentVideo == null)
       ) {
         return;
       }
@@ -147,12 +170,23 @@ class SubtitleController {
 
       const isLive = this.adapter.isLive?.(location.href) ?? false;
 
+      // 팝업이 DOM 없이도 isLive를 읽을 수 있도록 저장
+      void chrome.storage.local.set({
+        [`kaptik:live:${this.adapter.platform}:${videoId}`]: isLive,
+      });
+
+      // Basic 플랜: 라이브 스트림만 허용
+      if (!isLive && getEffectivePlan(this.settings) === "basic") {
+        this.teardown();
+        return;
+      }
+
       // 빈 트랙으로 먼저 마운트한 뒤 스트리밍으로 cue를 채운다
       const emptyTrack: SubtitleTrack = {
         platform: this.adapter.platform,
         videoId,
         cues: [],
-        availableLanguages: ["ko", "en"],
+        availableLanguages: ["ko", "en", "ja", "zh-CN", "id"],
         members: {},
       };
       const handle = mountDisplay(container, panelContainer, video, emptyTrack, isLive);
@@ -161,11 +195,13 @@ class SubtitleController {
       if (isLive) {
         // ── 라이브 경로: 탭 오디오 캡처 → 오프스크린 → 백엔드 WS ──
         const startLive = () => {
+          this.resetSpeakerIdTimer();
           chrome.runtime.sendMessage({
             type: "START_LIVE_STREAMING",
             platform: this.adapter.platform,
             videoId,
             captureStartVideoTime: Math.floor(video.currentTime),
+            videoTitle: document.title,
           }).catch((err: unknown) =>
             console.error("[Kaptik] START_LIVE_STREAMING 실패:", err),
           );
@@ -192,6 +228,7 @@ class SubtitleController {
         const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
         const startStreaming = (seekSec: number, keepCues = false) => {
+          this.resetSpeakerIdTimer();
           chrome.runtime.sendMessage({
             type: "START_STREAMING",
             youtubeUrl,
@@ -203,14 +240,15 @@ class SubtitleController {
         };
         this.startStreamingFn = startStreaming;
 
-        startStreaming(Math.floor(video.currentTime));
+        const vodStatus = await requestStatus(this.adapter.platform, videoId);
+        if (vodStatus?.state === "available") {
+          startStreaming(Math.floor(video.currentTime));
+        }
 
         let seekTimer: ReturnType<typeof setTimeout> | undefined;
-
-        const onPaused = () => {
-          chrome.runtime.sendMessage({ type: "STOP_STREAMING" }).catch(() => {});
-          console.info(`[Kaptik] 일시정지 → 스트리밍 중단 (${videoId})`);
-        };
+        // VOD는 cue가 DB에 사전 계산돼 있으므로 일시정지 중에도 WS 유지.
+        // YouTube 초기화 시 rapid pause→playing 이벤트가 발생해 세션이 끊기는 것을 방지.
+        // 재생 재개 시 onPlaying에서 새 seek 위치로 startStreaming을 호출하므로 WS가 갱신된다.
         const onPlaying = () => {
           clearTimeout(seekTimer);
           startStreaming(Math.floor(video.currentTime), true);
@@ -224,12 +262,10 @@ class SubtitleController {
           );
         };
 
-        video.addEventListener("pause", onPaused);
         video.addEventListener("playing", onPlaying);
         video.addEventListener("seeked", onSeeked);
         this.videoCleanup = () => {
           clearTimeout(seekTimer);
-          video.removeEventListener("pause", onPaused);
           video.removeEventListener("playing", onPlaying);
           video.removeEventListener("seeked", onSeeked);
         };
@@ -241,8 +277,22 @@ class SubtitleController {
     }
   }
 
+  /** 화자 식별 30초 타이머를 리셋한다. 30초 내 식별 없으면 콘솔 경고. */
+  private resetSpeakerIdTimer() {
+    clearTimeout(this.speakerIdTimer);
+    this.speakerIdentifiedOnce = false;
+    this.speakerIdTimer = window.setTimeout(() => {
+      if (!this.speakerIdentifiedOnce) {
+        console.info("[Kaptik] 30초 내 화자 식별 없음 — 화자 표시 비활성화");
+      }
+    }, 30_000);
+  }
+
   /** 표시 중인 자막 UI와 스트리밍 세션을 제거한다. */
   private teardown() {
+    clearTimeout(this.speakerIdTimer);
+    this.speakerIdTimer = undefined;
+    this.speakerIdentifiedOnce = false;
     this.videoCleanup?.();
     this.videoCleanup = null;
     this.startStreamingFn = null;

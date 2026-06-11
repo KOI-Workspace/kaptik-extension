@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { LANGUAGE_LABELS } from "@/types/subtitle";
 import type { LanguageCode, SubtitleTrack } from "@/types/subtitle";
 import type { KaptikSettings } from "@/shared/settings";
-import { updateSettings, PRICING_URL, isPaid } from "@/shared/settings";
+import { updateSettings, PRICING_URL, isPaid, getEffectivePlan } from "@/shared/settings";
 import { getMessages, UI_LANGUAGE_OPTIONS } from "@/shared/i18n";
 import { resolveMember } from "@/shared/members";
 import { Avatar } from "./Avatar";
@@ -153,7 +153,7 @@ export function SidePanel({
       </header>
 
       <div className="kaptik-panel-body" ref={listRef} onScroll={handleScroll}>
-        {!isPaid(settings.plan) ? (
+        {!isPaid(getEffectivePlan(settings)) ? (
           <div className="kaptik-lock">
             <div className="kaptik-lock-icon">🔒</div>
             <div className="kaptik-lock-title">{t.panelLockTitle}</div>
@@ -267,7 +267,7 @@ export function SidePanel({
         )}
       </div>
 
-      {isPaid(settings.plan) && !atBottom && (
+      {isPaid(getEffectivePlan(settings)) && !atBottom && (
         <button
           type="button"
           className="kaptik-latest"

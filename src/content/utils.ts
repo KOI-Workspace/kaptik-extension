@@ -61,10 +61,10 @@ export function watchUrlChanges(onChange: () => void): () => void {
   };
 
   const onPopState = () => fire();
-  const onYtNavigate = () => onChange();
+  // YouTube SPA 네비게이션 완료 이벤트 — URL이 실제로 바뀐 경우에만 onChange 호출
+  const onYtNavigate = () => fire();
 
   window.addEventListener("popstate", onPopState);
-  // YouTube SPA 네비게이션 완료 이벤트
   window.addEventListener("yt-navigate-finish", onYtNavigate);
 
   return () => {

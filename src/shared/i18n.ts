@@ -61,6 +61,8 @@ export interface Messages {
   upgradeCta: string;
   panelLockTitle: string;
   panelLockDesc: string;
+  vodLockTitle: string;
+  vodLockDesc: string;
   planTestLabel: string;
   // 패널
   panelTitle: string;
@@ -117,6 +119,8 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     upgradeCta: "Upgrade to Pro",
     panelLockTitle: "Subtitle history is a Pro feature",
     panelLockDesc: "Upgrade to follow the full speaker-by-speaker history.",
+    vodLockTitle: "Pro plan required for recorded videos",
+    vodLockDesc: "Basic includes live streams only. Upgrade to Pro to generate subtitles for any video.",
     planTestLabel: "Plan (dev test)",
     panelTitle: "Transcript",
     panelEmpty: "Subtitles will start soon",
@@ -169,6 +173,8 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     upgradeCta: "Proにアップグレード",
     panelLockTitle: "字幕履歴はPro機能です",
     panelLockDesc: "アップグレードで話者ごとの全履歴を表示できます。",
+    vodLockTitle: "録画動画はProプランが必要です",
+    vodLockDesc: "Basicはライブ配信のみ対応しています。すべての動画に字幕を付けるにはProにアップグレードしてください。",
     planTestLabel: "プラン（テスト）",
     panelTitle: "書き起こし",
     panelEmpty: "まもなく字幕が始まります",
@@ -219,6 +225,8 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     upgradeCta: "升级到 Pro",
     panelLockTitle: "字幕历史是 Pro 功能",
     panelLockDesc: "升级后可查看完整的分角色历史记录。",
+    vodLockTitle: "录制视频需要 Pro 套餐",
+    vodLockDesc: "Basic 仅支持直播。升级到 Pro 即可为任意视频生成字幕。",
     planTestLabel: "套餐（测试）",
     panelTitle: "文字记录",
     panelEmpty: "字幕即将开始",
@@ -271,6 +279,8 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     upgradeCta: "Upgrade ke Pro",
     panelLockTitle: "Riwayat subtitle adalah fitur Pro",
     panelLockDesc: "Upgrade untuk melihat riwayat lengkap per pembicara.",
+    vodLockTitle: "Video rekaman memerlukan paket Pro",
+    vodLockDesc: "Basic hanya mencakup siaran langsung. Upgrade ke Pro untuk membuat subtitle di semua video.",
     planTestLabel: "Paket (uji)",
     panelTitle: "Transkrip",
     panelEmpty: "Subtitle akan segera dimulai",

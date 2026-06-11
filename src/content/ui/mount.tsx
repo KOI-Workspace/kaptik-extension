@@ -1,6 +1,6 @@
 import { StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { SubtitleCue, SubtitleTrack } from "@/types/subtitle";
+import type { Member, SubtitleCue, SubtitleTrack } from "@/types/subtitle";
 import { Display } from "./Display";
 // CSS를 문자열로 가져와 Shadow DOM에 주입 (외부 사이트와 격리)
 import displayCss from "./display.css?inline";
@@ -13,6 +13,8 @@ export interface DisplayHandle {
   destroy(): void;
   /** 스트리밍으로 누적된 자막 큐 목록을 업데이트한다. */
   updateCues(cues: SubtitleCue[]): void;
+  /** 화자 식별 결과로 멤버 레지스트리를 업데이트한다. */
+  updateMembers(members: Record<string, Member>): void;
 }
 
 /** 격리된 Shadow DOM host를 만들고, 그 안에 렌더용 마운트 노드를 반환한다. */
@@ -81,16 +83,19 @@ export function mountDisplay(
     panelMount = panel.mount;
   }
 
-  // useState setter는 렌더 간 stable이므로 클로저 변수에 할당해도 안전하다.
+  // useState setters는 렌더 간 stable이므로 클로저 변수에 할당해도 안전하다.
   let _setCues: ((cues: SubtitleCue[]) => void) | null = null;
+  let _setMembers: ((updater: (prev: Record<string, Member>) => Record<string, Member>) => void) | null = null;
 
   function ConnectedDisplay() {
     const [cues, setCues] = useState<SubtitleCue[]>(track.cues);
+    const [members, setMembers] = useState<Record<string, Member>>(track.members);
     _setCues = setCues;
+    _setMembers = setMembers as typeof _setMembers;
     return (
       <Display
         video={video}
-        track={{ ...track, cues }}
+        track={{ ...track, cues, members }}
         panelMount={panelMount}
         panelDocked={panelDocked}
         isLive={isLive}
@@ -117,6 +122,9 @@ export function mountDisplay(
     },
     updateCues(cues) {
       _setCues?.(cues);
+    },
+    updateMembers(newEntries) {
+      _setMembers?.((prev) => ({ ...prev, ...newEntries }));
     },
   };
 }

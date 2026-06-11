@@ -24,6 +24,9 @@ export const youtubeAdapter: SiteAdapter = {
       // Shorts: /shorts/<id>
       const shorts = u.pathname.match(/\/shorts\/([\w-]+)/);
       if (shorts) return shorts[1];
+      // Live broadcast: youtube.com/live/<id>
+      const live = u.pathname.match(/\/live\/([\w-]+)/);
+      if (live) return live[1];
       return null;
     } catch {
       return null;
@@ -43,6 +46,16 @@ export const youtubeAdapter: SiteAdapter = {
       (document.querySelector("#movie_player") as HTMLElement | null) ??
       (document.querySelector(".html5-video-player") as HTMLElement | null)
     );
+  },
+
+  isLive(url: string): boolean {
+    try {
+      // youtube.com/live/<id> is always a live stream
+      if (/\/live\/[\w-]+/.test(new URL(url).pathname)) return true;
+    } catch { /* invalid URL */ }
+    // DOM fallback: YouTube adds .ytp-live when a live stream is playing
+    // Only meaningful in content script context — returns false in popup
+    return document.querySelector(".ytp-live") !== null;
   },
 
   getPanelContainer() {

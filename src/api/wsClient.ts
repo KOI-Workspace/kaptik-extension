@@ -1,4 +1,5 @@
-import type { SubtitleCue } from "@/types/subtitle";
+import type { Member, SubtitleCue } from "@/types/subtitle";
+import { resolveMemberByName } from "@/shared/members";
 
 interface PendingStage1 {
   text_ko: string;
@@ -19,6 +20,7 @@ export class StreamingSession {
     private onCueReady: (cue: SubtitleCue) => void,
     private onError: (msg: string) => void,
     private onDone?: (totalCues: number) => void,
+    private onSpeakerIdentified?: (speakerId: string, name: string, member: Member) => void,
   ) {}
 
   connect(): void {
@@ -75,6 +77,19 @@ export class StreamingSession {
     }
     if (msg.type === "status") {
       console.info(`[Kaptik WS] status: ${String(msg.message ?? "")}`);
+      return;
+    }
+    if (msg.type === "speaker_identified") {
+      const speakerId = String(msg.speaker ?? "");
+      const name = String(msg.name ?? "");
+      const confidence = Number(msg.confidence ?? 0);
+      const member = resolveMemberByName(name);
+      if (member) {
+        console.info(`[Kaptik WS] 화자 식별: ${speakerId} → ${name} (${member.name}, conf=${confidence.toFixed(2)})`);
+        this.onSpeakerIdentified?.(speakerId, name, member);
+      } else {
+        console.info(`[Kaptik WS] 화자 식별 (미등록 멤버): ${speakerId} → ${name}`);
+      }
       return;
     }
     if (msg.type === "done") {

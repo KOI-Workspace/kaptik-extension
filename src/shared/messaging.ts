@@ -1,4 +1,4 @@
-import type { Platform, SubtitleCue, SubtitleStatus, SubtitleTrack } from "@/types/subtitle";
+import type { Member, Platform, SubtitleCue, SubtitleStatus, SubtitleTrack } from "@/types/subtitle";
 
 /** content/popup → background 요청 메시지 */
 export type RequestMessage =
@@ -7,7 +7,7 @@ export type RequestMessage =
   | { type: "START_GENERATION"; platform: Platform; videoId: string }
   | { type: "START_STREAMING"; youtubeUrl: string; seekSec: number; serverUrl: string; keepCues?: boolean }
   | { type: "STOP_STREAMING" }
-  | { type: "START_LIVE_STREAMING"; platform: Platform; videoId: string; captureStartVideoTime: number }
+  | { type: "START_LIVE_STREAMING"; platform: Platform; videoId: string; captureStartVideoTime: number; videoTitle?: string }
   | { type: "STOP_LIVE_STREAMING" };
 
 /** background → 요청자 응답 메시지 */
@@ -23,7 +23,8 @@ export type BroadcastMessage =
   | { type: "SUBTITLES_READY"; platform: Platform; videoId: string }
   | { type: "CUE_READY"; cues: SubtitleCue[] }
   | { type: "STREAMING_ERROR"; message: string }
-  | { type: "SEEK_AND_SHOW"; seekSec: number };
+  | { type: "SEEK_AND_SHOW"; seekSec: number }
+  | { type: "SPEAKER_IDENTIFIED"; speakerId: string; name: string; member: Member };
 
 /** sendMessage 를 Promise로 감싸는 헬퍼 */
 function send<R extends ResponseMessage>(

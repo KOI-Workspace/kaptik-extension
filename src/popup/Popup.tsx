@@ -4,7 +4,7 @@ import {
   getSettings,
   updateSettings,
   isPaid,
-  decodeTokenPlan,
+  getEffectivePlan,
   PRICING_URL,
   type KaptikSettings,
 } from "@/shared/settings";
@@ -25,6 +25,7 @@ import {
 interface Target {
   platform: Platform;
   videoId: string;
+  isLive: boolean;
 }
 
 /** 토글 스위치 */
@@ -78,7 +79,13 @@ export function Popup() {
         if (active) setTarget(null);
         return;
       }
-      const target: Target = { platform: adapter.platform, videoId };
+      // content script가 DOM 기반으로 저장한 isLive를 읽는다 (없으면 URL 기반 폴백)
+      const storageKey = `kaptik:live:${adapter.platform}:${videoId}`;
+      const stored = await chrome.storage.local.get(storageKey);
+      const isLive = typeof stored[storageKey] === "boolean"
+        ? (stored[storageKey] as boolean)
+        : (adapter.isLive?.(url) ?? false);
+      const target: Target = { platform: adapter.platform, videoId, isLive };
       if (active) setTarget(target);
     })();
 
@@ -128,6 +135,10 @@ export function Popup() {
     setStatus({ state: "none" });
   };
 
+  const effectivePlan = getEffectivePlan(settings);
+  // Basic 플랜은 라이브 스트림만 허용 — VOD는 업그레이드 유도
+  const locked = target != null && !target.isLive && effectivePlan === "basic";
+
   // ── 렌더 ──
   return (
     <div className="popup">
@@ -140,9 +151,6 @@ export function Popup() {
         </div>
         <div className="popup-header-right">
           {(() => {
-            const effectivePlan = settings.authToken
-              ? decodeTokenPlan(settings.authToken)
-              : settings.plan;
             return isPaid(effectivePlan) ? (
               // 결제 후: 요금제 칩 + 프로필 아바타
               <div className="account">
@@ -173,11 +181,15 @@ export function Popup() {
       {target === undefined && <CheckingView t={t} />}
       {target === null && <UnsupportedView t={t} />}
 
-      {target && status.state === "none" && (
+      {target && locked && (
+        <LockedView t={t} onUpgrade={openPricing} />
+      )}
+
+      {target && !locked && status.state === "none" && (
         <NoneView t={t} onGenerate={handleGenerate} />
       )}
 
-      {target && status.state === "generating" && (
+      {target && !locked && status.state === "generating" && (
         <GeneratingView
           t={t}
           status={status}
@@ -186,11 +198,11 @@ export function Popup() {
         />
       )}
 
-      {target && status.state === "failed" && (
+      {target && !locked && status.state === "failed" && (
         <FailedView t={t} onRetry={handleRetry} />
       )}
 
-      {target && status.state === "available" && (
+      {target && !locked && status.state === "available" && (
         <AvailableView
           settings={settings}
           patch={patch}
@@ -288,6 +300,19 @@ function FailedView({ t, onRetry }: { t: Messages; onRetry: () => void }) {
   );
 }
 
+function LockedView({ t, onUpgrade }: { t: Messages; onUpgrade: () => void }) {
+  return (
+    <div className="state-block">
+      <div className="state-emoji">🔒</div>
+      <div className="state-title">{t.vodLockTitle}</div>
+      <div className="state-desc">{t.vodLockDesc}</div>
+      <button type="button" className="upgrade-cta" onClick={onUpgrade}>
+        {t.upgradeCta} →
+      </button>
+    </div>
+  );
+}
+
 /** 미결제(무료) 사용자에게 보여줄 업그레이드 배너 */
 function UpgradeBanner({ t, onUpgrade }: { t: Messages; onUpgrade: () => void }) {
   return (
@@ -332,7 +357,7 @@ function AvailableView({
 
   return (
     <>
-      {!isPaid(settings.plan) && <UpgradeBanner t={t} onUpgrade={onUpgrade} />}
+      {!isPaid(getEffectivePlan(settings)) && <UpgradeBanner t={t} onUpgrade={onUpgrade} />}
 
       <div className="card">
         <div className="row">
@@ -444,18 +469,30 @@ function AvailableView({
           />
         </div>
 
-        {/* 개발용: JWT 인증 토큰 (POST /auth/dev-token 으로 발급) */}
-        <div className="row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
-          <span className="row-label row-dev">Auth Token (dev)</span>
-          <input
-            type="text"
-            className="select"
-            style={{ width: "100%", boxSizing: "border-box" }}
-            value={settings.authToken}
-            placeholder="eyJ... (dev-token)"
-            onChange={(e) => patch({ authToken: e.target.value })}
+        {/* 개발용: Dev Mode 토글 — token="dev" 자동 전송 */}
+        <div className="row">
+          <span className="row-label row-dev">Dev Mode (skip auth)</span>
+          <Switch
+            checked={settings.devMode}
+            onChange={(v) => patch({ devMode: v })}
+            ariaLabel="Dev Mode"
           />
         </div>
+
+        {/* 개발용: JWT 인증 토큰 — devMode 꺼진 경우만 표시 */}
+        {!settings.devMode && (
+          <div className="row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+            <span className="row-label row-dev">Auth Token (dev)</span>
+            <input
+              type="text"
+              className="select"
+              style={{ width: "100%", boxSizing: "border-box" }}
+              value={settings.authToken}
+              placeholder="eyJ... (dev-token)"
+              onChange={(e) => patch({ authToken: e.target.value })}
+            />
+          </div>
+        )}
       </div>
     </>
   );

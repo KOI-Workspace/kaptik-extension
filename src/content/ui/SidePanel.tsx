@@ -185,10 +185,10 @@ export function SidePanel({
                 key={cue.start}
                 className={"kaptik-row" + (isActive ? " is-active" : "")}
               >
-                {member && <Avatar member={member} size={34} />}
+                {isLive && member && <Avatar member={member} size={34} />}
                 <div className="kaptik-row-main">
                   <div className="kaptik-row-head">
-                    {member && (
+                    {isLive && member && (
                       <span
                         className="kaptik-row-name"
                         style={{ color: member.color }}

@@ -39,6 +39,7 @@ class SubtitleController {
     panelContainer: HTMLElement | null;
     handle: DisplayHandle;
     video: HTMLVideoElement;
+    isLive: boolean;
   } | null = null;
   private videoCleanup: (() => void) | null = null;
   /** evaluate() 안에서 정의된 startStreaming을 외부(메시지 핸들러)에서도 호출 가능하도록 저장 */
@@ -83,7 +84,7 @@ class SubtitleController {
       } else if (message?.type === "CUE_READY") {
         this.mounted?.handle.updateCues(message.cues);
       } else if (message?.type === "SPEAKER_IDENTIFIED") {
-        if (this.mounted) {
+        if (this.mounted?.isLive) {
           // 화자 식별 성공 → 30s 타이머 해제, members 맵 업데이트
           clearTimeout(this.speakerIdTimer);
           this.speakerIdTimer = undefined;
@@ -190,7 +191,7 @@ class SubtitleController {
         members: {},
       };
       const handle = mountDisplay(container, panelContainer, video, emptyTrack, isLive);
-      this.mounted = { videoId, panelContainer, handle, video };
+      this.mounted = { videoId, panelContainer, handle, video, isLive };
 
       if (isLive) {
         // ── 라이브 경로: 탭 오디오 캡처 → 오프스크린 → 백엔드 WS ──

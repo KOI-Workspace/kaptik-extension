@@ -130,12 +130,6 @@ class SubtitleController {
           this.mounted.lastVodCues = [];
           this.mounted.vodCuesReady = false;
         }
-      } else if (message?.type === "SEEK_AND_SHOW") {
-        const video = this.mounted?.video;
-        if (video) {
-          video.currentTime = Math.max(0, video.currentTime - message.seekSec);
-          console.info(`[Kaptik Live] 라이브 싱크 seek -${message.seekSec}s → ${video.currentTime.toFixed(1)}s`);
-        }
       }
     });
 

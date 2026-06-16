@@ -24,7 +24,6 @@ export type BroadcastMessage =
   | { type: "CUES_ALL_READY"; platform: Platform; videoId: string }
   | { type: "CUE_READY"; cues: SubtitleCue[] }
   | { type: "STREAMING_ERROR"; message: string }
-  | { type: "SEEK_AND_SHOW"; seekSec: number }
   | { type: "SPEAKER_IDENTIFIED"; speakerId: string; name: string; member: Member };
 
 /** sendMessage 를 Promise로 감싸는 헬퍼 */

@@ -37,11 +37,8 @@ interface LiveSession {
   platform: Platform;
   videoId: string;
   captureStartVideoTime: number;
-  captureStartWallTime: number;
   cues: SubtitleCue[];
   pending: Map<number, { text_ko: string; speaker: string; cached: boolean }>;
-  seekSent: boolean;
-  seekTimer: ReturnType<typeof setTimeout> | null;
 }
 const liveSessions = new Map<number, LiveSession>();
 
@@ -264,7 +261,6 @@ async function handleStartLiveStreaming(
   // 기존 라이브 세션 정리
   const prev = liveSessions.get(tabId);
   if (prev) {
-    prev.seekTimer && clearTimeout(prev.seekTimer);
     chrome.runtime.sendMessage({ type: "STOP_CAPTURE" }).catch(() => {});
     liveSessions.delete(tabId);
   }
@@ -275,11 +271,8 @@ async function handleStartLiveStreaming(
     platform,
     videoId,
     captureStartVideoTime,
-    captureStartWallTime: Date.now(),
     cues: [],
     pending: new Map(),
-    seekSent: false,
-    seekTimer: null,
   };
   liveSessions.set(tabId, session);
 
@@ -313,17 +306,6 @@ async function handleStartLiveStreaming(
     videoUrl,
   }).catch(() => {});
 
-  // 30초 후 아직 seek를 보내지 않았으면 SEEK_AND_SHOW 발송
-  session.seekTimer = setTimeout(() => {
-    const live = liveSessions.get(tabId);
-    if (live && !live.seekSent) {
-      live.seekSent = true;
-      const msg: BroadcastMessage = { type: "SEEK_AND_SHOW", seekSec: 30 };
-      chrome.tabs.sendMessage(tabId, msg).catch(() => {});
-      console.info(`[Kaptik BG Live] SEEK_AND_SHOW tabId=${tabId}`);
-    }
-  }, 30_000);
-
   console.info(`[Kaptik BG Live] 라이브 스트리밍 시작 tabId=${tabId} platform=${platform} sessionId=${sessionId}`);
   return { type: "STREAMING_STARTED" };
 }
@@ -331,7 +313,6 @@ async function handleStartLiveStreaming(
 function handleStopLiveStreaming(tabId: number): void {
   const session = liveSessions.get(tabId);
   if (!session) return;
-  session.seekTimer && clearTimeout(session.seekTimer);
   chrome.runtime.sendMessage({ type: "STOP_CAPTURE" }).catch(() => {});
   liveSessions.delete(tabId);
 
@@ -396,15 +377,6 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
 
     const msg: BroadcastMessage = { type: "CUE_READY", cues: [...session.cues] };
     chrome.tabs.sendMessage(tabId, msg).catch(() => {});
-
-    // 첫 cue가 도착하고 30초 분량(ts >= 30s)이면 즉시 SEEK_AND_SHOW
-    if (!session.seekSent && ts >= 30_000) {
-      session.seekSent = true;
-      session.seekTimer && clearTimeout(session.seekTimer);
-      const seekMsg: BroadcastMessage = { type: "SEEK_AND_SHOW", seekSec: 30 };
-      chrome.tabs.sendMessage(tabId, seekMsg).catch(() => {});
-      console.info(`[Kaptik BG Live] 조기 SEEK_AND_SHOW (ts=${ts}ms) tabId=${tabId}`);
-    }
   }
 }
 

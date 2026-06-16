@@ -82,7 +82,7 @@ export interface Messages {
   // 미리보기 샘플 자막
   previewText: string;
   // 라이브 스트림
-  liveDelayBadge: string;
+  liveBadge: string;
   liveJustNow: string;
   liveAgoSec: (s: number) => string;
   liveAgoMin: (m: number) => string;
@@ -144,7 +144,7 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     ariaCloseAnnotation: "Close note",
     seekTo: (t) => `Jump to ${t}`,
     previewText: "Hey everyone, we're finally here!",
-    liveDelayBadge: "30s delay",
+    liveBadge: "LIVE",
     liveJustNow: "just now",
     liveAgoSec: (s) => `${s}s ago`,
     liveAgoMin: (m) => `${m}m ago`,
@@ -205,7 +205,7 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     ariaCloseAnnotation: "メモを閉じる",
     seekTo: (t) => `${t}へ移動`,
     previewText: "みなさん、やっと来ましたよ！",
-    liveDelayBadge: "30秒遅延",
+    liveBadge: "LIVE",
     liveJustNow: "たった今",
     liveAgoSec: (s) => `${s}秒前`,
     liveAgoMin: (m) => `${m}分前`,
@@ -264,7 +264,7 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     ariaCloseAnnotation: "关闭注释",
     seekTo: (t) => `跳转到 ${t}`,
     previewText: "大家好，我们终于来了！",
-    liveDelayBadge: "30秒延迟",
+    liveBadge: "LIVE",
     liveJustNow: "刚刚",
     liveAgoSec: (s) => `${s}秒前`,
     liveAgoMin: (m) => `${m}分前`,
@@ -325,7 +325,7 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     ariaCloseAnnotation: "Tutup catatan",
     seekTo: (t) => `Lompat ke ${t}`,
     previewText: "Hai semua, kita akhirnya di sini!",
-    liveDelayBadge: "Tunda 30d",
+    liveBadge: "LIVE",
     liveJustNow: "baru saja",
     liveAgoSec: (s) => `${s}d lalu`,
     liveAgoMin: (m) => `${m}m lalu`,

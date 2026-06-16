@@ -162,7 +162,7 @@ export function SidePanel({
           <span className="kaptik-panel-dot" />
           {t.panelTitle}
           {isLive && (
-            <span className="kaptik-live-badge">{t.liveDelayBadge}</span>
+            <span className="kaptik-live-badge">{t.liveBadge}</span>
           )}
         </div>
         <div className="kaptik-panel-actions">

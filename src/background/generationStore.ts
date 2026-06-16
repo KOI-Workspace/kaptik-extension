@@ -10,8 +10,8 @@ import type { Platform, SubtitleStatus } from "@/types/subtitle";
  * - 그 외 → none
  */
 
-/** 데모용 생성 소요 시간(ms). 실제로는 영상 길이에 비례. */
-const DEFAULT_DURATION_MS = 12_000;
+/** 로컬 폴백 기준 소요 시간(ms). 백엔드 pct가 오면 오버라이드됨. */
+const DEFAULT_DURATION_MS = 300_000;
 
 const JOBS_KEY = "kaptik:jobs";
 const DONE_KEY = "kaptik:available";
@@ -24,6 +24,12 @@ interface Job {
   durationMs: number;
   /** 백엔드 ws-job 진행 메시지에서 수신한 실제 진행률 (0~1) */
   pct?: number;
+  /** 마지막 pct 수신 타임스탬프 (ETA 속도 계산용) */
+  pctAt?: number;
+  /** 그 이전 pct 값 */
+  prevPct?: number;
+  /** 그 이전 pct 타임스탬프 */
+  prevPctAt?: number;
   /** 백엔드 ws-job 진행 메시지에서 수신한 현재 단계 */
   step?: string;
 }
@@ -106,9 +112,29 @@ export async function getLocalStatus(
     await markDone(key);
     return { state: "available" };
   }
+
+  // ETA: 백엔드 pct 속도(dpct/dt)로 계산, 데이터 부족하면 로컬 타이머 폴백
+  let etaSeconds: number;
+  if (
+    job.pct !== undefined &&
+    job.prevPct !== undefined &&
+    job.pctAt !== undefined &&
+    job.prevPctAt !== undefined
+  ) {
+    const dt = (job.pctAt - job.prevPctAt) / 1000;
+    const dpct = job.pct - job.prevPct;
+    if (dpct > 0 && dt > 0) {
+      etaSeconds = Math.ceil((1 - job.pct) / (dpct / dt));
+    } else {
+      etaSeconds = Math.max(0, Math.ceil((job.durationMs - elapsed) / 1000));
+    }
+  } else {
+    etaSeconds = Math.max(0, Math.ceil((job.durationMs - elapsed) / 1000));
+  }
+
   return {
     state: "generating",
-    etaSeconds: Math.max(0, Math.ceil((job.durationMs - elapsed) / 1000)),
+    etaSeconds,
     progress: job.pct ?? Math.min(0.99, elapsed / job.durationMs),
     step: job.step,
   };
@@ -143,7 +169,15 @@ export async function updateJobProgress(
   const key = keyOf(platform, videoId);
   const jobs = await readJobs();
   if (jobs[key]) {
-    jobs[key] = { ...jobs[key], step, pct };
+    const prev = jobs[key];
+    jobs[key] = {
+      ...prev,
+      step,
+      prevPct: prev.pct,
+      prevPctAt: prev.pctAt,
+      pct,
+      pctAt: Date.now(),
+    };
     await writeJobs(jobs);
   }
 }

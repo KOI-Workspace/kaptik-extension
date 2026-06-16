@@ -34,7 +34,17 @@
       "Bash(npx vite *)",
       "Bash(echo \"EXIT: $?\")",
       "Bash(kill 19034 19056 20827 20850 20824 19030)",
-      "Bash(xargs ls -la)"
+      "Bash(xargs ls -la)",
+      "Bash(lsof -iTCP -sTCP:LISTEN -P)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(mkdir -p /tmp/kaptik-screens)",
+      "Bash(cp /Users/leehyunsoo/Dream/Kaptik/kaptik-extension/src/popup/popup.css /tmp/kaptik-screens/popup.css)",
+      "Bash(cp /Users/leehyunsoo/Dream/Kaptik/kaptik-extension/src/content/ui/display.css /tmp/kaptik-screens/display.css)",
+      "Read(//tmp/**)",
+      "Bash(git checkout *)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(kill 47186 47164)"
     ]
   }
 }

@@ -22,7 +22,17 @@
       "Bash(npx tsc *)",
       "Bash(echo \"=== exit: $? ===\")",
       "Bash(node -e \"const m=require\\('./dist/manifest.json'\\); console.log\\('matches:', JSON.stringify\\(m.content_scripts?.map\\(c=>c.matches\\)\\)\\); console.log\\('host_permissions:', JSON.stringify\\(m.host_permissions\\)\\); console.log\\('permissions:', JSON.stringify\\(m.permissions\\)\\); console.log\\('js:', JSON.stringify\\(m.content_scripts?.map\\(c=>c.js\\)\\)\\);\")",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(lsof -iTCP -sTCP:LISTEN -P)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(mkdir -p /tmp/kaptik-screens)",
+      "Bash(cp /Users/leehyunsoo/Dream/Kaptik/kaptik-extension/src/popup/popup.css /tmp/kaptik-screens/popup.css)",
+      "Bash(cp /Users/leehyunsoo/Dream/Kaptik/kaptik-extension/src/content/ui/display.css /tmp/kaptik-screens/display.css)",
+      "Read(//tmp/**)",
+      "Bash(git checkout *)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(kill 47186 47164)"
     ]
   }
 }

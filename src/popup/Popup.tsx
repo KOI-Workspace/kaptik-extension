@@ -29,7 +29,7 @@ interface Target {
 }
 
 /** 토글 스위치 */
-function Switch({
+export function Switch({
   checked,
   onChange,
   ariaLabel,
@@ -59,6 +59,7 @@ export function Popup() {
   // 팝업이 열린 상태에서 generating → available 전환이 감지되면 설정창 대신 완료 안내 뷰를 표시
   const [generatedWhileOpen, setGeneratedWhileOpen] = useState(false);
   const prevStatusStateRef = useRef<SubtitleStatus["state"]>("none");
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   // 2초 폴링 interval ID (cleanup용)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -153,6 +154,20 @@ export function Popup() {
     setStatus({ state: "none" });
   };
 
+  const handleLogout = () => {
+    setAccountMenuOpen(false);
+    patch({ loggedIn: false });
+  };
+
+  // 로그인 전에는 다른 모든 화면보다 로그인 화면을 우선 표시
+  if (!settings.loggedIn) {
+    return (
+      <div className="popup">
+        <LoginView t={t} onLogin={() => patch({ loggedIn: true })} />
+      </div>
+    );
+  }
+
   const effectivePlan = getEffectivePlan(settings);
   // Basic 플랜은 라이브 스트림만 허용 — VOD는 업그레이드 유도
   const locked = target != null && !target.isLive && effectivePlan === "basic";
@@ -170,14 +185,30 @@ export function Popup() {
         <div className="popup-header-right">
           {(() => {
             return isPaid(effectivePlan) ? (
-              // 결제 후: 요금제 칩 + 프로필 아바타
+              // 결제 후: 요금제 칩 + 프로필 아바타 (클릭 시 로그아웃 메뉴)
               <div className="account">
                 <span className={"plan-chip plan-" + effectivePlan}>
                   {effectivePlan === "pro" ? t.planPro : t.planBasic}
                 </span>
-                <span className="account-avatar" title={settings.profileName}>
+                <button
+                  type="button"
+                  className="account-avatar"
+                  title={settings.profileName}
+                  onClick={() => setAccountMenuOpen((v) => !v)}
+                >
                   {settings.profileName.trim().charAt(0).toUpperCase()}
-                </span>
+                </button>
+                {accountMenuOpen && (
+                  <div className="account-menu">
+                    <button
+                      type="button"
+                      className="account-menu-item"
+                      onClick={handleLogout}
+                    >
+                      {t.logoutBtn}
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               // 미로그인 또는 무료: 결제하러 가기
@@ -208,16 +239,11 @@ export function Popup() {
       )}
 
       {target && !locked && status.state === "generating" && (
-        <GeneratingView
-          t={t}
-          status={status}
-          notifyOnReady={settings.notifyOnReady}
-          onNotifyChange={(v) => patch({ notifyOnReady: v })}
-        />
+        <GeneratingView t={t} status={status} />
       )}
 
       {target && !locked && status.state === "failed" && (
-        <FailedView t={t} onRetry={handleRetry} />
+        <FailedView t={t} reason={status.reason} onRetry={handleRetry} />
       )}
 
       {target && !locked && status.state === "available" && generatedWhileOpen && (
@@ -234,18 +260,34 @@ export function Popup() {
         />
       )}
 
-      <DevSettingsSection settings={settings} patch={patch} />
+      {import.meta.env.DEV && <DevSettingsSection settings={settings} patch={patch} />}
     </div>
   );
 }
 
 /* ── 상태별 뷰 ── */
 
-function CheckingView({ t }: { t: Messages }) {
+export function CheckingView({ t }: { t: Messages }) {
   return <div className="state-block state-checking">{t.checking}</div>;
 }
 
-function UnsupportedView({ t }: { t: Messages }) {
+export function LoginView({ t, onLogin }: { t: Messages; onLogin: () => void }) {
+  return (
+    <div className="login-view">
+      <div className="login-logo">
+        Kapti<span>k</span>
+      </div>
+      <div className="login-tagline">{t.appTagline}</div>
+      <div className="login-title">{t.loginTitle}</div>
+      <div className="login-desc">{t.loginDesc}</div>
+      <button type="button" className="btn-primary" onClick={onLogin}>
+        {t.loginWithGoogle}
+      </button>
+    </div>
+  );
+}
+
+export function UnsupportedView({ t }: { t: Messages }) {
   return (
     <div className="state-block">
       <div className="state-emoji">🎬</div>
@@ -255,7 +297,7 @@ function UnsupportedView({ t }: { t: Messages }) {
   );
 }
 
-function NoneView({ t, onGenerate }: { t: Messages; onGenerate: () => void }) {
+export function NoneView({ t, onGenerate }: { t: Messages; onGenerate: () => void }) {
   return (
     <div className="state-block">
       <div className="state-title">{t.noneTitle}</div>
@@ -293,16 +335,12 @@ const STEP_LABELS: Record<string, string> = {
   translate: "AI Translating…",
 };
 
-function GeneratingView({
+export function GeneratingView({
   t,
   status,
-  notifyOnReady,
-  onNotifyChange,
 }: {
   t: Messages;
   status: { state: "generating"; etaSeconds: number; progress: number; step?: string };
-  notifyOnReady: boolean;
-  onNotifyChange: (v: boolean) => void;
 }) {
   const pct = Math.round(status.progress * 100);
   const stepLabel = status.step ? (STEP_LABELS[status.step] ?? status.step) : null;
@@ -318,20 +356,31 @@ function GeneratingView({
         <span>{pct}%</span>
         <span>{t.generatingEta(status.etaSeconds)}</span>
       </div>
-      <div className="notify-row">
-        <span className="notify-label">{t.notifyLabel}</span>
-        <Switch
-          checked={notifyOnReady}
-          onChange={onNotifyChange}
-          ariaLabel={t.ariaNotifyReady}
-        />
-      </div>
       <div className="state-note">{t.generatingNote}</div>
     </div>
   );
 }
 
-function FailedView({ t, onRetry }: { t: Messages; onRetry: () => void }) {
+export function FailedView({
+  t,
+  reason,
+  onRetry,
+}: {
+  t: Messages;
+  reason?: string;
+  onRetry: () => void;
+}) {
+  // 한국어 영상이 아님 — 재시도해도 결과가 같으므로 버튼 없이 안내만
+  if (reason === "not_korean") {
+    return (
+      <div className="state-block">
+        <div className="state-emoji">🚫</div>
+        <div className="state-title">{t.cannotCreateTitle}</div>
+        <div className="state-desc">{t.cannotCreateNotKoreanDesc}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="state-block">
       <div className="state-title">{t.failedTitle}</div>
@@ -342,7 +391,7 @@ function FailedView({ t, onRetry }: { t: Messages; onRetry: () => void }) {
   );
 }
 
-function LockedView({ t, onUpgrade }: { t: Messages; onUpgrade: () => void }) {
+export function LockedView({ t, onUpgrade }: { t: Messages; onUpgrade: () => void }) {
   return (
     <div className="state-block">
       <div className="state-emoji">🔒</div>
@@ -369,7 +418,7 @@ function UpgradeBanner({ t, onUpgrade }: { t: Messages; onUpgrade: () => void })
   );
 }
 
-function AvailableView({
+export function AvailableView({
   settings,
   patch,
   t,

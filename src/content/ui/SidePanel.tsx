@@ -192,7 +192,13 @@ export function SidePanel({
       </header>
 
       <div className="kaptik-panel-body" ref={listRef} onScroll={handleScroll}>
-        {!isPaid(getEffectivePlan(settings)) ? (
+        {track.error ? (
+          <div className="kaptik-lock">
+            <div className="kaptik-lock-icon">🚫</div>
+            <div className="kaptik-lock-title">{t.cannotCreateTitle}</div>
+            <div className="kaptik-lock-desc">{t.cannotCreateNotKoreanDesc}</div>
+          </div>
+        ) : !isPaid(getEffectivePlan(settings)) ? (
           <div className="kaptik-lock">
             <div className="kaptik-lock-icon">🔒</div>
             <div className="kaptik-lock-title">{t.panelLockTitle}</div>
@@ -222,10 +228,10 @@ export function SidePanel({
                 ref={isActive ? activeRowRef : null}
                 className={"kaptik-row" + (isActive ? " is-active" : "")}
               >
-                {isLive && member && <Avatar member={member} size={34} />}
+                {settings.showSpeaker && member && <Avatar member={member} size={34} />}
                 <div className="kaptik-row-main">
                   <div className="kaptik-row-head">
-                    {isLive && member && (
+                    {member?.name && (
                       <span
                         className="kaptik-row-name"
                         style={{ color: member.color }}

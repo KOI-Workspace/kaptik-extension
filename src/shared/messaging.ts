@@ -21,6 +21,7 @@ export type ResponseMessage =
 /** background → content 브로드캐스트 */
 export type BroadcastMessage =
   | { type: "SUBTITLES_READY"; platform: Platform; videoId: string }
+  | { type: "CUES_ALL_READY"; platform: Platform; videoId: string }
   | { type: "CUE_READY"; cues: SubtitleCue[] }
   | { type: "STREAMING_ERROR"; message: string }
   | { type: "SEEK_AND_SHOW"; seekSec: number }

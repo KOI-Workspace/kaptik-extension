@@ -11,7 +11,7 @@ import {
 } from "@/shared/settings";
 import { mountDisplay, type DisplayHandle } from "./ui/mount";
 import { waitFor, watchUrlChanges } from "./utils";
-import type { SubtitleTrack } from "@/types/subtitle";
+import type { SubtitleCue, SubtitleTrack } from "@/types/subtitle";
 
 /**
  * content script 진입점.
@@ -40,6 +40,9 @@ class SubtitleController {
     handle: DisplayHandle;
     video: HTMLVideoElement;
     isLive: boolean;
+    /** VOD 전용: 스트리밍 완료 전까지 cues를 버퍼링 */
+    vodCuesReady: boolean;
+    lastVodCues: SubtitleCue[];
   } | null = null;
   private videoCleanup: (() => void) | null = null;
   /** evaluate() 안에서 정의된 startStreaming을 외부(메시지 핸들러)에서도 호출 가능하도록 저장 */
@@ -76,13 +79,34 @@ class SubtitleController {
           this.startStreamingFn &&
           this.mounted.videoId === message.videoId
         ) {
-          // 이미 마운트된 상태 → 생성 완료 후 현재 재생 위치부터 스트리밍 재시작
+          // 생성 완료 → 현재 재생 위치부터 스트리밍 재시작, cue 버퍼 초기화
+          this.mounted.vodCuesReady = false;
+          this.mounted.lastVodCues = [];
           this.startStreamingFn(Math.floor(this.mounted.video.currentTime));
         } else {
           void this.evaluate();
         }
       } else if (message?.type === "CUE_READY") {
-        this.mounted?.handle.updateCues(message.cues);
+        if (this.mounted) {
+          if (this.mounted.isLive) {
+            this.mounted.handle.updateCues(message.cues);
+          } else if (this.mounted.vodCuesReady) {
+            // 첫 로딩 완료 후 seek/재생 시 즉시 반영
+            this.mounted.handle.updateCues(message.cues);
+          } else {
+            // 최초 로딩 중: 버퍼에만 저장 (백엔드가 매번 전체 배열을 전송)
+            this.mounted.lastVodCues = message.cues;
+          }
+        }
+      } else if (message?.type === "CUES_ALL_READY") {
+        if (
+          this.mounted &&
+          !this.mounted.isLive &&
+          this.mounted.videoId === message.videoId
+        ) {
+          this.mounted.vodCuesReady = true;
+          this.mounted.handle.updateCues(this.mounted.lastVodCues);
+        }
       } else if (message?.type === "SPEAKER_IDENTIFIED") {
         if (this.mounted?.isLive) {
           // 화자 식별 성공 → 30s 타이머 해제, members 맵 업데이트
@@ -101,6 +125,11 @@ class SubtitleController {
         }
       } else if (message?.type === "STREAMING_ERROR") {
         console.error("[Kaptik] 스트리밍 오류:", message.message);
+        if (this.mounted && !this.mounted.isLive) {
+          this.mounted.handle.updateCues([]);
+          this.mounted.lastVodCues = [];
+          this.mounted.vodCuesReady = false;
+        }
       } else if (message?.type === "SEEK_AND_SHOW") {
         const video = this.mounted?.video;
         if (video) {
@@ -191,7 +220,7 @@ class SubtitleController {
         members: {},
       };
       const handle = mountDisplay(container, panelContainer, video, emptyTrack, isLive);
-      this.mounted = { videoId, panelContainer, handle, video, isLive };
+      this.mounted = { videoId, panelContainer, handle, video, isLive, vodCuesReady: false, lastVodCues: [] };
 
       if (isLive) {
         // ── 라이브 경로: 탭 오디오 캡처 → 오프스크린 → 백엔드 WS ──

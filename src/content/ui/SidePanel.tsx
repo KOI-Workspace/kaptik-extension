@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LANGUAGE_LABELS } from "@/types/subtitle";
 import type { LanguageCode, SubtitleTrack } from "@/types/subtitle";
 import type { KaptikSettings } from "@/shared/settings";
@@ -66,30 +66,66 @@ export function SidePanel({
   isLive = false,
 }: SidePanelProps) {
   const listRef = useRef<HTMLDivElement>(null);
+  const activeRowRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [open, setOpen] = useState<OpenAnnotation | null>(null);
 
   // 선택 언어에 맞춘 UI 텍스트
   const t = getMessages(settings.language);
 
-  // 새 발화가 추가될 때, 사용자가 맨 아래를 보고 있으면 자동 스크롤
+  // 라이브: 맨 아래를 보고 있으면 새 cue 도착 시 자동 스크롤
   useEffect(() => {
+    if (!isLive) return;
     if (atBottom && listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [activeIndex, atBottom]);
+  }, [activeIndex, atBottom, isLive]);
+
+  // VOD: activeIndex가 바뀔 때마다 활성 cue가 패널 내 보이는 영역 안에 있도록 스크롤.
+  // useLayoutEffect: paint 전에 실행되므로 잘못된 스크롤 위치가 화면에 보이지 않는다.
+  useLayoutEffect(() => {
+    if (isLive || !activeRowRef.current || !listRef.current) return;
+    const list = listRef.current;
+    const row = activeRowRef.current;
+    const listRect = list.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    // 이미 완전히 보이면 스크롤하지 않음
+    if (rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom) return;
+    // 행이 범위 밖이면 중앙으로 이동
+    const rowRelTop = rowRect.top - listRect.top + list.scrollTop;
+    list.scrollTop = rowRelTop - (list.clientHeight - row.clientHeight) / 2;
+  }, [activeIndex, isLive]);
 
   const handleScroll = () => {
     const el = listRef.current;
     if (!el) return;
+    if (!isLive) {
+      // VOD: 활성 cue가 보이면 버튼 숨김, 스크롤로 벗어나면 버튼 표시
+      const row = activeRowRef.current;
+      if (!row) { setAtBottom(true); return; }
+      const listRect = el.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      setAtBottom(rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom);
+      return;
+    }
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     setAtBottom(distance < 48);
   };
 
   const scrollToLatest = () => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-    setAtBottom(true);
+    if (isLive) {
+      const el = listRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+      setAtBottom(true);
+    } else if (activeRowRef.current && listRef.current) {
+      // VOD: 현재 활성 cue를 패널 중앙으로
+      const list = listRef.current;
+      const row = activeRowRef.current;
+      const listRect = list.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      const rowRelTop = rowRect.top - listRect.top + list.scrollTop;
+      list.scrollTop = rowRelTop - (list.clientHeight - row.clientHeight) / 2;
+    }
   };
 
   const seekTo = (start: number) => {
@@ -183,6 +219,7 @@ export function SidePanel({
             return (
               <div
                 key={cue.start}
+                ref={isActive ? activeRowRef : null}
                 className={"kaptik-row" + (isActive ? " is-active" : "")}
               >
                 {isLive && member && <Avatar member={member} size={34} />}

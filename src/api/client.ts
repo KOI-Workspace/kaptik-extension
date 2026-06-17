@@ -94,12 +94,15 @@ export async function createJob(opts: {
   authToken: string;
   url: string;
   targetLang: string;
+  trackKind?: string;
 }): Promise<{ jobId: string }> {
   const base = wsUrlToHttp(opts.serverUrl);
   const tokenParam = opts.authToken ? `?token=${encodeURIComponent(opts.authToken)}` : "";
+  const body: Record<string, unknown> = { url: opts.url, target_lang: opts.targetLang };
+  if (opts.trackKind) body.track_kind = opts.trackKind;
   const res = await fetchJson<{ job_id: string }>(
     `${base}/jobs${tokenParam}`,
-    { method: "POST", body: { url: opts.url, target_lang: opts.targetLang }, authToken: opts.authToken },
+    { method: "POST", body, authToken: opts.authToken },
   );
   return { jobId: res.job_id };
 }

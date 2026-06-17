@@ -81,6 +81,47 @@ function cacheKey(platform: string, videoId: string): string {
   return `${platform}:${videoId}`;
 }
 
+/** YouTube 플레이어에서 caption trackKind를 읽어온다 (MAIN world 실행) */
+async function fetchTrackKind(tabId: number): Promise<string | undefined> {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: () => {
+        try {
+          type YTPlayer = HTMLElement & {
+            getPlayerResponse?: () => {
+              captions?: {
+                playerCaptionsTracklistRenderer?: {
+                  captionTracks?: Array<{ kind?: string }>;
+                };
+              };
+            };
+          };
+          const player = document.getElementById("movie_player") as YTPlayer | null;
+          const tracks = player?.getPlayerResponse?.()
+            ?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+          const track = tracks?.[0];
+          if (!track) return undefined;
+          return track.kind === "asr" ? "ASR" : "standard";
+        } catch {
+          return undefined;
+        }
+      },
+    });
+    return results[0]?.result ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 팝업처럼 sender.tab이 없는 경우 활성 YouTube 탭 ID를 조회한다 */
+async function resolveYoutubeTabId(senderTabId: number | undefined): Promise<number | undefined> {
+  if (senderTabId) return senderTabId;
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true, url: "*://*.youtube.com/*" });
+  return tabs[0]?.id;
+}
+
 // ── 자막 트랙 ─────────────────────────────────────────────
 async function handleGetSubtitles(
   platform: Platform,
@@ -114,6 +155,7 @@ async function handleGetStatus(
 
 // ── 자막 생성 시작 ────────────────────────────────────────
 async function handleStartGeneration(
+  senderTabId: number | undefined,
   platform: Platform,
   videoId: string,
   force = false,
@@ -150,9 +192,14 @@ async function handleStartGeneration(
   // YouTube만 지원 (타 플랫폼은 라이브 스트리밍 경로)
   const url = `https://www.youtube.com/watch?v=${videoId}`;
 
+  // job 생성 전 track_kind 조회 — 서버가 파이프라인(ASR vs 스크립트 번역)을 결정하는 데 사용
+  const tabId = await resolveYoutubeTabId(senderTabId);
+  const trackKind = tabId ? await fetchTrackKind(tabId) : undefined;
+  console.info(`[Kaptik BG] track_kind=${trackKind ?? "없음"} (${videoId})`);
+
   let jobId: string;
   try {
-    const result = await createJob({ serverUrl, authToken, url, targetLang: language });
+    const result = await createJob({ serverUrl, authToken, url, targetLang: language, trackKind });
     jobId = result.jobId;
   } catch (e) {
     console.error("[Kaptik BG] Job 생성 실패:", e);
@@ -532,7 +579,7 @@ chrome.runtime.onMessage.addListener(
           case "GET_STATUS":
             return await handleGetStatus(req.platform, req.videoId);
           case "START_GENERATION":
-            return await handleStartGeneration(req.platform, req.videoId, req.force);
+            return await handleStartGeneration(sender.tab?.id, req.platform, req.videoId, req.force);
           case "START_STREAMING": {
             const tabId = sender.tab?.id;
             if (!tabId) return { type: "ERR", error: "tabId 없음" };
@@ -572,38 +619,9 @@ chrome.runtime.onMessage.addListener(
             return { type: "ERR", error: "" };
           }
           case "GET_TRACK_KIND": {
-            const tabId = sender.tab?.id;
+            const tabId = await resolveYoutubeTabId(sender.tab?.id);
             if (!tabId) return { type: "TRACK_KIND_OK" };
-            try {
-              const results = await chrome.scripting.executeScript({
-                target: { tabId },
-                world: "MAIN",
-                func: () => {
-                  try {
-                    type YTPlayer = HTMLElement & {
-                      getPlayerResponse?: () => {
-                        captions?: {
-                          playerCaptionsTracklistRenderer?: {
-                            captionTracks?: Array<{ kind?: string }>;
-                          };
-                        };
-                      };
-                    };
-                    const player = document.getElementById("movie_player") as YTPlayer | null;
-                    const tracks = player?.getPlayerResponse?.()
-                      ?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-                    const track = tracks?.[0];
-                    if (!track) return undefined;
-                    return track.kind === "asr" ? "ASR" : "standard";
-                  } catch {
-                    return undefined;
-                  }
-                },
-              });
-              return { type: "TRACK_KIND_OK", trackKind: results[0]?.result ?? undefined };
-            } catch {
-              return { type: "TRACK_KIND_OK" };
-            }
+            return { type: "TRACK_KIND_OK", trackKind: await fetchTrackKind(tabId) };
           }
           default:
             return { type: "ERR", error: "알 수 없는 메시지" };

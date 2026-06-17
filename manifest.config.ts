@@ -46,7 +46,7 @@ export default function getManifest(mode: string) {
         all_frames: false,
       },
     ],
-    permissions: ["storage", "notifications", "tabs", "cookies", "tabCapture", "offscreen"],
+    permissions: ["storage", "notifications", "tabs", "cookies", "tabCapture", "offscreen", "alarms"],
     host_permissions: [
       "*://*.youtube.com/*",
       "*://*.weverse.io/*",

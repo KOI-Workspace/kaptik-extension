@@ -221,10 +221,9 @@ async function onGenerationComplete(
   videoId: string,
 ): Promise<void> {
   await broadcastReady(platform, videoId);
-  // 폴백: 60초 내 스트리밍 완료가 없으면 자동 표시 (탭 닫힘 등 엣지 케이스)
-  setTimeout(() => {
-    void markCuesReady(platform, videoId);
-  }, 60_000);
+  // 폴백: MV3 SW는 30초 idle 후 종료될 수 있으므로 setTimeout 대신 chrome.alarms 사용.
+  // 60초 내 스트리밍이 완료되지 않으면 알람 핸들러가 강제로 완료 처리한다.
+  chrome.alarms.create(`cues-ready:${platform}:${videoId}`, { delayInMinutes: 1 });
 }
 
 /** cues 로딩 완료 시 Chrome 알림 발동 */
@@ -404,6 +403,7 @@ async function handleStartStreaming(
   seekSec: number,
   serverUrl: string,
   keepCues: boolean,
+  trackKind?: string,
 ): Promise<ResponseMessage> {
   const settings = await getSettings();
   const { language, devMode } = settings;
@@ -472,6 +472,7 @@ async function handleStartStreaming(
           void notifySubtitlesReady("youtube", videoId);
         },
         onSpeakerIdentified,
+        trackKind,
       );
 
   streamingSessions.set(tabId, { session, cues });
@@ -541,6 +542,7 @@ chrome.runtime.onMessage.addListener(
               req.seekSec,
               req.serverUrl,
               req.keepCues ?? false,
+              req.trackKind,
             );
           }
           case "STOP_STREAMING": {
@@ -586,6 +588,21 @@ chrome.runtime.onMessage.addListener(
 
 chrome.runtime.onInstalled.addListener((details) => {
   console.info(`[Kaptik] 설치/업데이트: ${details.reason}`);
+});
+
+// cues-ready 알람: 스트리밍이 자연 완료되지 않은 경우 강제 전환 후 재브로드캐스트
+chrome.alarms.onAlarm.addListener((alarm) => {
+  const match = alarm.name.match(/^cues-ready:([^:]+):(.+)$/);
+  if (!match) return;
+  const [, platform, videoId] = match;
+  void (async () => {
+    const alreadyReady = await areCuesReady(platform as Platform, videoId);
+    if (alreadyReady) return; // 스트리밍이 정상 완료됨 → 처리 불필요
+    // 스트리밍 미완료 → 강제로 ready 처리 후 SUBTITLES_READY 재브로드캐스트
+    // content script가 이를 받아 startStreamingFn을 재호출해 cues를 로드한다.
+    await markCuesReady(platform as Platform, videoId);
+    await broadcastReady(platform as Platform, videoId);
+  })();
 });
 
 // 스트리밍 세션이 활성 중일 때 서비스 워커가 sleep되지 않도록 20초마다 ping

@@ -160,7 +160,7 @@ export function Popup() {
     patch({ language: newLang });
     prevStatusStateRef.current = "generating";
     setStatus({ state: "generating", etaSeconds: 0, progress: 0 });
-    void startGeneration(target.platform, target.videoId, true).then((eta) => {
+    void startGeneration(target.platform, target.videoId, true, newLang).then((eta) => {
       if (eta === null) {
         setStatus({ state: "failed" });
       } else {
@@ -276,7 +276,7 @@ export function Popup() {
         />
       )}
 
-      {import.meta.env.DEV && <DevSettingsSection settings={settings} patch={patch} />}
+      {(import.meta.env.DEV || settings.devMode) && <DevSettingsSection settings={settings} patch={patch} />}
     </div>
   );
 }
@@ -326,24 +326,6 @@ export function NoneView({ t, onGenerate }: { t: Messages; onGenerate: () => voi
   );
 }
 
-function SubtitleReadyView({
-  t,
-  onConfigure,
-}: {
-  t: Messages;
-  onConfigure: () => void;
-}) {
-  return (
-    <div className="state-block">
-      <div className="state-emoji">✅</div>
-      <div className="state-title">{t.readyTitle}</div>
-      <div className="state-desc">{t.readyDesc}</div>
-      <button type="button" className="btn-primary" onClick={onConfigure}>
-        {t.viewSubtitlesBtn}
-      </button>
-    </div>
-  );
-}
 
 /** 백엔드 step 값을 표시용 레이블로 변환 */
 const STEP_LABELS: Record<string, string> = {

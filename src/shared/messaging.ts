@@ -4,7 +4,7 @@ import type { Member, Platform, SubtitleCue, SubtitleStatus, SubtitleTrack } fro
 export type RequestMessage =
   | { type: "GET_SUBTITLES"; platform: Platform; videoId: string }
   | { type: "GET_STATUS"; platform: Platform; videoId: string }
-  | { type: "START_GENERATION"; platform: Platform; videoId: string; force?: boolean }
+  | { type: "START_GENERATION"; platform: Platform; videoId: string; force?: boolean; language?: string }
   | { type: "START_STREAMING"; youtubeUrl: string; seekSec: number; serverUrl: string; keepCues?: boolean; trackKind?: string }
   | { type: "STOP_STREAMING" }
   | { type: "START_LIVE_STREAMING"; platform: Platform; videoId: string; captureStartVideoTime: number; videoTitle?: string; videoUrl?: string }
@@ -69,7 +69,8 @@ export async function startGeneration(
   platform: Platform,
   videoId: string,
   force = false,
+  language?: string,
 ): Promise<number | null> {
-  const res = await send({ type: "START_GENERATION", platform, videoId, force });
+  const res = await send({ type: "START_GENERATION", platform, videoId, force, language });
   return res?.type === "GENERATION_STARTED" ? res.etaSeconds : null;
 }

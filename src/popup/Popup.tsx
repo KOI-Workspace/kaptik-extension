@@ -161,6 +161,23 @@ export function Popup() {
     setStatus({ state: "none" });
   };
 
+  const handleLanguageChange = (newLang: LanguageCode) => {
+    if (!target) return;
+    patch({ language: newLang });
+    setGeneratedWhileOpen(false);
+    prevStatusStateRef.current = "generating";
+    setStatus({ state: "generating", etaSeconds: 0, progress: 0 });
+    void startGeneration(target.platform, target.videoId, true).then((eta) => {
+      if (eta === null) {
+        setStatus({ state: "failed" });
+      } else {
+        setStatus((prev) =>
+          prev?.state === "generating" ? { ...prev, etaSeconds: eta } : prev
+        );
+      }
+    });
+  };
+
   const handleLogout = () => {
     setAccountMenuOpen(false);
     patch({ loggedIn: false });
@@ -266,6 +283,7 @@ export function Popup() {
           t={t}
           onUpgrade={openPricing}
           isLive={target.isLive}
+          onLanguageChange={handleLanguageChange}
         />
       )}
 
@@ -436,12 +454,14 @@ export function AvailableView({
   t,
   onUpgrade,
   isLive,
+  onLanguageChange,
 }: {
   settings: KaptikSettings;
   patch: (next: Partial<KaptikSettings>) => void;
   t: Messages;
   onUpgrade: () => void;
   isLive: boolean;
+  onLanguageChange?: (lang: LanguageCode) => void;
 }) {
   // 자막이 꺼져 있으면 '자막 보기'로 켜도록 유도
   if (!settings.enabled) {
@@ -471,7 +491,11 @@ export function AvailableView({
             className="select"
             value={settings.language}
             aria-label={t.ariaChangeLang}
-            onChange={(e) => patch({ language: e.target.value as LanguageCode })}
+            onChange={(e) => {
+              const lang = e.target.value as LanguageCode;
+              if (onLanguageChange) onLanguageChange(lang);
+              else patch({ language: lang });
+            }}
           >
             {UI_LANGUAGE_OPTIONS.map((code) => (
               <option key={code} value={code}>

@@ -4,7 +4,7 @@ import type { Member, Platform, SubtitleCue, SubtitleStatus, SubtitleTrack } fro
 export type RequestMessage =
   | { type: "GET_SUBTITLES"; platform: Platform; videoId: string }
   | { type: "GET_STATUS"; platform: Platform; videoId: string }
-  | { type: "START_GENERATION"; platform: Platform; videoId: string }
+  | { type: "START_GENERATION"; platform: Platform; videoId: string; force?: boolean }
   | { type: "START_STREAMING"; youtubeUrl: string; seekSec: number; serverUrl: string; keepCues?: boolean }
   | { type: "STOP_STREAMING" }
   | { type: "START_LIVE_STREAMING"; platform: Platform; videoId: string; captureStartVideoTime: number; videoTitle?: string; videoUrl?: string }
@@ -62,11 +62,12 @@ export async function requestStatus(
   return res?.type === "STATUS_OK" ? res.status : null;
 }
 
-/** 자막 생성을 시작한다. @returns 예상 소요 시간(초) 또는 null */
+/** 자막 생성을 시작한다. force=true면 기존 자막을 지우고 재생성한다. @returns 예상 소요 시간(초) 또는 null */
 export async function startGeneration(
   platform: Platform,
   videoId: string,
+  force = false,
 ): Promise<number | null> {
-  const res = await send({ type: "START_GENERATION", platform, videoId });
+  const res = await send({ type: "START_GENERATION", platform, videoId, force });
   return res?.type === "GENERATION_STARTED" ? res.etaSeconds : null;
 }

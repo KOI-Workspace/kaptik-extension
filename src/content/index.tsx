@@ -158,7 +158,11 @@ class SubtitleController {
     if (this.evaluating) return;
     this.evaluating = true;
     try {
-      const videoId = this.adapter.getVideoId(location.href);
+      // DOM 속성 기반 ID를 우선 사용 (autoplay 시 URL보다 먼저 업데이트됨).
+      // URL이 아직 이전 영상을 가리켜도 실제 재생 중인 영상을 정확히 감지할 수 있다.
+      const getEffectiveVideoId = () =>
+        this.adapter.getDomVideoId?.() ?? this.adapter.getVideoId(location.href);
+      const videoId = getEffectiveVideoId();
 
       // 영상 없음 / 자막 OFF → 숨김
       if (!videoId || !this.settings.enabled) {
@@ -186,7 +190,7 @@ class SubtitleController {
       // 평가 도중 영상/설정이 바뀌었으면 중단
       if (
         !video ||
-        videoId !== this.adapter.getVideoId(location.href) ||
+        videoId !== getEffectiveVideoId() ||
         !this.settings.enabled
       ) {
         return;
@@ -288,6 +292,8 @@ class SubtitleController {
       } else {
         // ── VOD 경로: YouTube WS 스트리밍 ──
         const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const trackKind = await getYoutubeTrackKind(videoId);
+        console.info(`[Kaptik YT] trackKind=${trackKind ?? "없음"} (${videoId})`);
 
         const startStreaming = (seekSec: number, keepCues = false) => {
           this.resetSpeakerIdTimer();
@@ -297,6 +303,7 @@ class SubtitleController {
             seekSec,
             serverUrl: this.settings.serverUrl,
             keepCues,
+            trackKind,
           }).catch((err: unknown) => console.error("[Kaptik YT] START_STREAMING 실패:", err));
           console.info(`[Kaptik YT] 스트리밍 요청 (${videoId}, seek=${seekSec}s, keepCues=${keepCues})`);
         };
@@ -363,6 +370,45 @@ class SubtitleController {
     this.mounted?.handle.destroy();
     this.mounted = null;
   }
+}
+
+/**
+ * YouTube caption의 trackKind를 ytInitialPlayerResponse에서 읽어온다.
+ * "asr" → "ASR", 그 외 트랙 존재 → "standard", 트랙 없음 → undefined
+ */
+function getYoutubeTrackKind(videoId: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const RESPONSE_TYPE = "KAPTIK_TRACK_KIND_RESULT";
+    const handler = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      const data = event.data as Record<string, unknown>;
+      if (data?.type !== RESPONSE_TYPE) return;
+      window.removeEventListener("message", handler);
+      resolve(data.trackKind as string | undefined);
+    };
+    window.addEventListener("message", handler);
+    setTimeout(() => {
+      window.removeEventListener("message", handler);
+      resolve(undefined);
+    }, 1000);
+
+    const script = document.createElement("script");
+    script.textContent = `(function(videoId){
+      try{
+        const resp=window.ytInitialPlayerResponse;
+        if(resp?.videoDetails?.videoId!==videoId){
+          window.postMessage({type:"${RESPONSE_TYPE}",trackKind:undefined},"*");
+          return;
+        }
+        const tracks=resp?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+        const track=tracks?.[0];
+        const kind=track?.kind==="asr"?"ASR":(track?"standard":undefined);
+        window.postMessage({type:"${RESPONSE_TYPE}",trackKind:kind},"*");
+      }catch(e){window.postMessage({type:"${RESPONSE_TYPE}",trackKind:undefined},"*");}
+    })(${JSON.stringify(videoId)});`;
+    (document.head ?? document.documentElement).appendChild(script);
+    script.remove();
+  });
 }
 
 // YouTube 페이지의 PO Token을 page context JS에서 읽어 background에 반환.

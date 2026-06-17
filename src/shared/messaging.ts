@@ -5,7 +5,7 @@ export type RequestMessage =
   | { type: "GET_SUBTITLES"; platform: Platform; videoId: string }
   | { type: "GET_STATUS"; platform: Platform; videoId: string }
   | { type: "START_GENERATION"; platform: Platform; videoId: string; force?: boolean }
-  | { type: "START_STREAMING"; youtubeUrl: string; seekSec: number; serverUrl: string; keepCues?: boolean }
+  | { type: "START_STREAMING"; youtubeUrl: string; seekSec: number; serverUrl: string; keepCues?: boolean; trackKind?: string }
   | { type: "STOP_STREAMING" }
   | { type: "START_LIVE_STREAMING"; platform: Platform; videoId: string; captureStartVideoTime: number; videoTitle?: string; videoUrl?: string }
   | { type: "STOP_LIVE_STREAMING" };

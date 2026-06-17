@@ -161,9 +161,12 @@ async function handleStartGeneration(
   platform: Platform,
   videoId: string,
   force = false,
+  msgLanguage?: string,
 ): Promise<ResponseMessage> {
   const settings = await getSettings();
-  const { serverUrl, language, devMode } = settings;
+  // 메시지에 language가 있으면 우선 사용 — 팝업이 patch()와 동시에 요청을 보낼 때 스토리지 쓰기 완료 전에 백그라운드가 구 언어를 읽는 race condition 방지
+  const language = msgLanguage ?? settings.language;
+  const { serverUrl, devMode } = settings;
   const authToken = devMode ? "dev" : settings.authToken;
 
   if (force) {
@@ -583,7 +586,7 @@ chrome.runtime.onMessage.addListener(
           case "GET_STATUS":
             return await handleGetStatus(req.platform, req.videoId);
           case "START_GENERATION":
-            return await handleStartGeneration(sender.tab?.id, req.platform, req.videoId, req.force);
+            return await handleStartGeneration(sender.tab?.id, req.platform, req.videoId, req.force, req.language);
           case "START_STREAMING": {
             const tabId = sender.tab?.id;
             if (!tabId) return { type: "ERR", error: "tabId 없음" };

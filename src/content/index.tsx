@@ -74,6 +74,12 @@ class SubtitleController {
     // URL 변경(SPA) → 재평가
     watchUrlChanges(() => void this.evaluate());
 
+    // YouTube SPA 네비게이션 시작 즉시 자막 화면을 비운다
+    // (pushState → evaluate 사이의 지연 동안 이전 영상 자막이 노출되는 것을 방지)
+    window.addEventListener("yt-navigate-start", () => {
+      this.mounted?.handle.updateCues([]);
+    });
+
     // background 브로드캐스트 처리
     chrome.runtime.onMessage.addListener((message: BroadcastMessage) => {
       if (
@@ -160,6 +166,7 @@ class SubtitleController {
     // 이미 평가 중이면 끼어들지 않는다 (긴 await가 취소되는 무한 루프 방지)
     if (this.evaluating) return;
     this.evaluating = true;
+    const urlAtStart = location.href;
     try {
       // URL 기반으로 영상 ID를 판별한다.
       // YouTube SPA는 pushState로 URL을 먼저 바꾼 뒤 DOM을 업데이트하므로
@@ -344,6 +351,11 @@ class SubtitleController {
       console.info(`[Kaptik] 자막 마운트 완료 (${this.adapter.platform}/${videoId}, isLive=${isLive})`);
     } finally {
       this.evaluating = false;
+      // evaluate 실행 중 URL이 변경됐으면 재실행
+      // (pushState가 evaluating lock에 막혀 무시됐을 때: lastUrl이 업데이트됐지만 evaluate는 실행 안 됨)
+      if (location.href !== urlAtStart) {
+        void this.evaluate();
+      }
     }
   }
 

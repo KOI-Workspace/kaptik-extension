@@ -58,7 +58,6 @@ export function Popup() {
   // undefined: 첫 poll 응답 대기 중 (팝업 열릴 때 순간적으로 NoneView가 보이지 않도록)
   const [status, setStatus] = useState<SubtitleStatus | undefined>(undefined);
   // 팝업이 열린 상태에서 generating → available 전환이 감지되면 설정창 대신 완료 안내 뷰를 표시
-  const [generatedWhileOpen, setGeneratedWhileOpen] = useState(false);
   const prevStatusStateRef = useRef<SubtitleStatus["state"]>("none");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   // 2초 폴링 interval ID (cleanup용)
@@ -106,9 +105,6 @@ export function Popup() {
     const poll = async () => {
       const s = await requestStatus(target.platform, target.videoId);
       if (active && s) {
-        if (prevStatusStateRef.current === "generating" && s.state === "available") {
-          setGeneratedWhileOpen(true);
-        }
         // 로컬 상태가 아직 "none"이지만 UI가 "generating"인 경우 — job이 백엔드에서
         // 아직 startLocalJob 전이므로 poll이 "none"을 돌려줘 UI를 되돌리지 않도록 한다.
         if (prevStatusStateRef.current === "generating" && s.state === "none") return;
@@ -141,7 +137,6 @@ export function Popup() {
 
   const handleGenerate = () => {
     if (!target) return;
-    setGeneratedWhileOpen(false);
     prevStatusStateRef.current = "generating";
     setStatus({ state: "generating", etaSeconds: 0, progress: 0 });
     void startGeneration(target.platform, target.videoId).then((eta) => {
@@ -156,7 +151,6 @@ export function Popup() {
   };
 
   const handleRetry = () => {
-    setGeneratedWhileOpen(false);
     prevStatusStateRef.current = "none";
     setStatus({ state: "none" });
   };
@@ -164,7 +158,6 @@ export function Popup() {
   const handleLanguageChange = (newLang: LanguageCode) => {
     if (!target) return;
     patch({ language: newLang });
-    setGeneratedWhileOpen(false);
     prevStatusStateRef.current = "generating";
     setStatus({ state: "generating", etaSeconds: 0, progress: 0 });
     void startGeneration(target.platform, target.videoId, true).then((eta) => {
@@ -241,7 +234,7 @@ export function Popup() {
               </button>
             );
           })()}
-          {target && status?.state === "available" && !generatedWhileOpen && (
+          {target && status?.state === "available" && (
             <Switch
               checked={settings.enabled}
               onChange={(v) => patch({ enabled: v })}
@@ -272,11 +265,7 @@ export function Popup() {
         <FailedView t={t} reason={status.reason} onRetry={handleRetry} />
       )}
 
-      {target && !locked && status?.state === "available" && generatedWhileOpen && (
-        <SubtitleReadyView t={t} onConfigure={() => setGeneratedWhileOpen(false)} />
-      )}
-
-      {target && !locked && status?.state === "available" && !generatedWhileOpen && (
+      {target && !locked && status?.state === "available" && (
         <AvailableView
           settings={settings}
           patch={patch}
@@ -635,6 +624,23 @@ function DevSettingsSection({
               />
             </div>
           )}
+          <div className="row">
+            <span className="row-label row-dev">Clear subtitle data</span>
+            <button
+              type="button"
+              className="dev-clear-btn"
+              onClick={() => {
+                void chrome.storage.local.remove([
+                  "kaptik:available",
+                  "kaptik:jobs",
+                  "kaptik:cues_ready",
+                  "kaptik:gen_lang",
+                ]);
+              }}
+            >
+              Clear
+            </button>
+          </div>
         </div>
       )}
     </div>

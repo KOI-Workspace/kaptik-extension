@@ -61,7 +61,13 @@ class SubtitleController {
 
     // 설정 변경(자막 ON/OFF, 패널 표시 등) → 재평가
     onSettingsChanged((s) => {
+      const prevLanguage = this.settings.language;
       this.settings = s;
+      // 언어 변경 시: 기존 자막 즉시 제거하고 SUBTITLES_READY 브로드캐스트로 재마운트
+      if (prevLanguage !== s.language && this.mounted) {
+        this.teardown();
+        return;
+      }
       void this.evaluate();
     });
 

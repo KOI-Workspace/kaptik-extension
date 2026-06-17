@@ -116,14 +116,20 @@ async function handleGetStatus(
 async function handleStartGeneration(
   platform: Platform,
   videoId: string,
+  force = false,
 ): Promise<ResponseMessage> {
-  // 이미 진행 중이거나 완료된 경우 중복 job 생성 방지
-  const currentStatus = await getLocalStatus(platform, videoId);
-  if (currentStatus.state === "generating") {
-    return { type: "GENERATION_STARTED", etaSeconds: currentStatus.etaSeconds ?? 0 };
-  }
-  if (currentStatus.state === "available") {
-    return { type: "GENERATION_STARTED", etaSeconds: 0 };
+  // force: 언어 변경 시 기존 자막을 지우고 재생성
+  if (force) {
+    await removeAvailable(platform, videoId);
+  } else {
+    // 이미 진행 중이거나 완료된 경우 중복 job 생성 방지
+    const currentStatus = await getLocalStatus(platform, videoId);
+    if (currentStatus.state === "generating") {
+      return { type: "GENERATION_STARTED", etaSeconds: currentStatus.etaSeconds ?? 0 };
+    }
+    if (currentStatus.state === "available") {
+      return { type: "GENERATION_STARTED", etaSeconds: 0 };
+    }
   }
 
   const settings = await getSettings();
@@ -525,7 +531,7 @@ chrome.runtime.onMessage.addListener(
           case "GET_STATUS":
             return await handleGetStatus(req.platform, req.videoId);
           case "START_GENERATION":
-            return await handleStartGeneration(req.platform, req.videoId);
+            return await handleStartGeneration(req.platform, req.videoId, req.force);
           case "START_STREAMING": {
             const tabId = sender.tab?.id;
             if (!tabId) return { type: "ERR", error: "tabId 없음" };

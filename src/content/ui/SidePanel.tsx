@@ -1,9 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { LANGUAGE_LABELS } from "@/types/subtitle";
 import type { LanguageCode, SubtitleTrack } from "@/types/subtitle";
 import type { KaptikSettings } from "@/shared/settings";
-import { updateSettings, PRICING_URL, isPaid, getEffectivePlan } from "@/shared/settings";
-import { getMessages, UI_LANGUAGE_OPTIONS } from "@/shared/i18n";
+import { PRICING_URL, isPaid, getEffectivePlan } from "@/shared/settings";
+import { getMessages } from "@/shared/i18n";
 import { resolveMember } from "@/shared/members";
 import { Avatar } from "./Avatar";
 import { AnnotatedText } from "./AnnotatedText";
@@ -148,13 +147,6 @@ export function SidePanel({
   // 라이브 상대 시간 기준점 — 가장 최근 발화의 start
   const latestStart = history.length > 0 ? history[history.length - 1].start : 0;
 
-  // 트랙이 제공하는 언어 중 UI 지원 언어(한국어 제외)만 선택지로 노출
-  const available = track.availableLanguages.filter((c) =>
-    (UI_LANGUAGE_OPTIONS as string[]).includes(c),
-  );
-  const languageOptions: LanguageCode[] =
-    available.length > 0 ? available : UI_LANGUAGE_OPTIONS;
-
   return (
     <aside className={`kaptik-panel kaptik-panel--${variant}`}>
       <header className="kaptik-panel-head">
@@ -164,22 +156,6 @@ export function SidePanel({
           {isLive && (
             <span className="kaptik-live-badge">{t.liveBadge}</span>
           )}
-        </div>
-        <div className="kaptik-panel-actions">
-          <select
-            className="kaptik-lang-select"
-            value={settings.language}
-            aria-label={t.ariaChangeLang}
-            onChange={(e) =>
-              void updateSettings({ language: e.target.value as LanguageCode })
-            }
-          >
-            {languageOptions.map((code) => (
-              <option key={code} value={code}>
-                {LANGUAGE_LABELS[code]}
-              </option>
-            ))}
-          </select>
         </div>
       </header>
 

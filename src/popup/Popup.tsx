@@ -370,22 +370,13 @@ export function GeneratingView({
   t: Messages;
   status: { state: "generating"; etaSeconds: number; progress: number; step?: string };
 }) {
-  const pct = Math.round(status.progress * 100);
-  const stepLabel = status.step ? (STEP_LABELS[status.step] ?? status.step) : null;
+  const stepLabel = status.step ? (STEP_LABELS[status.step] ?? null) : null;
 
   return (
     <div className="state-block">
+      <div className="spinner" />
       <div className="state-title">{t.generatingTitle}</div>
       {stepLabel && <div className="state-step">{stepLabel}</div>}
-      <div className="progress" style={{ width: "100%" }}>
-        <div className="progress-bar" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="progress-meta">
-        <span>{pct}%</span>
-        {status.step !== "cues_loading" && (
-          <span>{t.generatingEta(status.etaSeconds)}</span>
-        )}
-      </div>
       <div className="state-note">{t.generatingNote}</div>
     </div>
   );

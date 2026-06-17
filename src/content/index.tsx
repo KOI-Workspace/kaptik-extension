@@ -292,7 +292,7 @@ class SubtitleController {
       } else {
         // ── VOD 경로: YouTube WS 스트리밍 ──
         const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        const trackKind = await getYoutubeTrackKind(videoId);
+        const trackKind = await getYoutubeTrackKind();
         console.info(`[Kaptik YT] trackKind=${trackKind ?? "없음"} (${videoId})`);
 
         const startStreaming = (seekSec: number, keepCues = false) => {
@@ -376,7 +376,7 @@ class SubtitleController {
  * YouTube caption의 trackKind를 ytInitialPlayerResponse에서 읽어온다.
  * "asr" → "ASR", 그 외 트랙 존재 → "standard", 트랙 없음 → undefined
  */
-function getYoutubeTrackKind(videoId: string): Promise<string | undefined> {
+function getYoutubeTrackKind(): Promise<string | undefined> {
   return new Promise((resolve) => {
     const RESPONSE_TYPE = "KAPTIK_TRACK_KIND_RESULT";
     const handler = (event: MessageEvent) => {
@@ -393,19 +393,18 @@ function getYoutubeTrackKind(videoId: string): Promise<string | undefined> {
     }, 1000);
 
     const script = document.createElement("script");
-    script.textContent = `(function(videoId){
+    // ytInitialPlayerResponse는 SPA 이동 후 stale해지므로
+    // 플레이어 DOM의 getPlayerResponse()로 현재 영상 데이터를 직접 읽는다
+    script.textContent = `(function(){
       try{
-        const resp=window.ytInitialPlayerResponse;
-        if(resp?.videoDetails?.videoId!==videoId){
-          window.postMessage({type:"${RESPONSE_TYPE}",trackKind:undefined},"*");
-          return;
-        }
+        const player=document.getElementById("movie_player");
+        const resp=player?.getPlayerResponse?.();
         const tracks=resp?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
         const track=tracks?.[0];
         const kind=track?.kind==="asr"?"ASR":(track?"standard":undefined);
         window.postMessage({type:"${RESPONSE_TYPE}",trackKind:kind},"*");
       }catch(e){window.postMessage({type:"${RESPONSE_TYPE}",trackKind:undefined},"*");}
-    })(${JSON.stringify(videoId)});`;
+    })();`;
     (document.head ?? document.documentElement).appendChild(script);
     script.remove();
   });

@@ -108,11 +108,12 @@ export async function getLocalStatus(
   const key = keyOf(platform, videoId);
   const done = await readDone();
   if (done.includes(key)) {
-    // 생성 시 사용된 언어와 현재 요청 언어가 다르면 아직 해당 언어 자막 없음
+    // 생성 시 사용된 언어와 현재 요청 언어가 다르면 아직 해당 언어 자막 없음.
+    // gen_lang 항목이 없는 구버전 데이터도 언어 불명으로 간주해 재생성 요구.
     if (currentLanguage) {
       const genLang = await readGenLang();
       const storedLang = genLang[key];
-      if (storedLang && storedLang !== currentLanguage) {
+      if (!storedLang || storedLang !== currentLanguage) {
         return { state: "none" };
       }
     }

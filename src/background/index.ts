@@ -141,9 +141,11 @@ async function handleGetStatus(
   platform: Platform,
   videoId: string,
 ): Promise<ResponseMessage> {
+  const settings = await getSettings();
   // 폴백: 로컬 시뮬레이션 (실제 백엔드는 ws-job으로 진행 추적)
   const wasDone = await isLocalJobDone(platform, videoId);
-  const status = await getLocalStatus(platform, videoId);
+  // 현재 언어를 전달해 다른 언어로 생성된 자막은 "none"으로 처리
+  const status = await getLocalStatus(platform, videoId, settings.language);
   // getLocalStatus 내부에서 막 완료/실패 전이됐는데, 전이 핸들러(setTimeout 등)가
   // 같은 타이밍에 먼저 가져가 버려 SUBTITLES_READY를 못 보내는 경쟁을 방지
   if (!wasDone) {
@@ -160,27 +162,29 @@ async function handleStartGeneration(
   videoId: string,
   force = false,
 ): Promise<ResponseMessage> {
-  // force: 언어 변경 시 기존 자막을 지우고 재생성
+  const settings = await getSettings();
+  const { serverUrl, language, devMode } = settings;
+  const authToken = devMode ? "dev" : settings.authToken;
+
   if (force) {
+    // 강제 재생성: 이전 언어 자막 초기화
     await removeAvailable(platform, videoId);
   } else {
-    // 이미 진행 중이거나 완료된 경우 중복 job 생성 방지
-    const currentStatus = await getLocalStatus(platform, videoId);
+    // 현재 언어 기준으로 상태 확인 — 다른 언어로 생성된 자막은 "none"으로 처리됨
+    const currentStatus = await getLocalStatus(platform, videoId, language);
     if (currentStatus.state === "generating") {
       return { type: "GENERATION_STARTED", etaSeconds: currentStatus.etaSeconds ?? 0 };
     }
     if (currentStatus.state === "available") {
       return { type: "GENERATION_STARTED", etaSeconds: 0 };
     }
+    // state === "none": 언어 불일치로 인한 재생성 포함 — 이전 상태 초기화
+    await removeAvailable(platform, videoId);
   }
-
-  const settings = await getSettings();
-  const { serverUrl, language, devMode } = settings;
-  const authToken = devMode ? "dev" : settings.authToken;
 
   // devMode: 백엔드 없이 기존 mock 자막 데이터로 생성 흐름을 재현 (화면 상태 확인용)
   if (devMode) {
-    const etaSeconds = await startLocalJob(platform, videoId);
+    const etaSeconds = await startLocalJob(platform, videoId, language);
     setTimeout(() => {
       void completeLocalJob(platform, videoId).then((becameDone) => {
         if (becameDone) void onGenerationComplete(platform, videoId);
@@ -207,7 +211,7 @@ async function handleStartGeneration(
   }
 
   // 로컬 상태를 generating으로 전이 — 팝업 폴링이 즉시 반영되도록
-  const etaSeconds = await startLocalJob(platform, videoId);
+  const etaSeconds = await startLocalJob(platform, videoId, language);
 
   openJobSocket(jobId, platform, videoId, serverUrl, authToken);
   return { type: "GENERATION_STARTED", etaSeconds };

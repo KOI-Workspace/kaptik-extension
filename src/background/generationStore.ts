@@ -16,12 +16,16 @@ const DEFAULT_DURATION_MS = 300_000;
 const JOBS_KEY = "kaptik:jobs";
 const DONE_KEY = "kaptik:available";
 const CUES_KEY = "kaptik:cues_ready";
+/** videoId 키 → 생성 시 사용된 언어 코드 */
+const GEN_LANG_KEY = "kaptik:gen_lang";
 
 interface Job {
   platform: Platform;
   videoId: string;
   startedAt: number;
   durationMs: number;
+  /** 생성 요청 시 사용된 언어 코드 */
+  language?: string;
   /** 백엔드 ws-job 진행 메시지에서 수신한 실제 진행률 (0~1) */
   pct?: number;
   /** 마지막 pct 수신 타임스탬프 (ETA 속도 계산용) */
@@ -55,6 +59,11 @@ async function readDone(): Promise<string[]> {
 async function readCuesReady(): Promise<string[]> {
   const r = await chrome.storage.local.get(CUES_KEY);
   return (r[CUES_KEY] ?? []) as string[];
+}
+
+async function readGenLang(): Promise<Record<string, string>> {
+  const r = await chrome.storage.local.get(GEN_LANG_KEY);
+  return (r[GEN_LANG_KEY] ?? {}) as Record<string, string>;
 }
 
 export async function markCuesReady(platform: Platform, videoId: string): Promise<void> {
@@ -94,10 +103,19 @@ async function markDone(key: string): Promise<boolean> {
 export async function getLocalStatus(
   platform: Platform,
   videoId: string,
+  currentLanguage?: string,
 ): Promise<SubtitleStatus> {
   const key = keyOf(platform, videoId);
   const done = await readDone();
   if (done.includes(key)) {
+    // 생성 시 사용된 언어와 현재 요청 언어가 다르면 아직 해당 언어 자막 없음
+    if (currentLanguage) {
+      const genLang = await readGenLang();
+      const storedLang = genLang[key];
+      if (storedLang && storedLang !== currentLanguage) {
+        return { state: "none" };
+      }
+    }
     const cuesReady = await areCuesReady(platform, videoId);
     if (cuesReady) return { state: "available" };
     return { state: "generating", progress: 0.99, etaSeconds: 0, step: "cues_loading" };
@@ -148,12 +166,17 @@ export async function getLocalStatus(
 export async function startLocalJob(
   platform: Platform,
   videoId: string,
+  language: string,
   durationMs: number = DEFAULT_DURATION_MS,
 ): Promise<number> {
   const key = keyOf(platform, videoId);
-  const jobs = await readJobs();
-  jobs[key] = { platform, videoId, startedAt: Date.now(), durationMs };
-  await writeJobs(jobs);
+  const [jobs, genLang] = await Promise.all([readJobs(), readGenLang()]);
+  jobs[key] = { platform, videoId, startedAt: Date.now(), durationMs, language };
+  genLang[key] = language;
+  await Promise.all([
+    writeJobs(jobs),
+    chrome.storage.local.set({ [GEN_LANG_KEY]: genLang }),
+  ]);
   return Math.ceil(durationMs / 1000);
 }
 
@@ -195,11 +218,15 @@ export async function completeLocalJob(
 
 export async function removeAvailable(platform: Platform, videoId: string): Promise<void> {
   const key = keyOf(platform, videoId);
-  const [done, jobs, cues] = await Promise.all([readDone(), readJobs(), readCuesReady()]);
+  const [done, jobs, cues, genLang] = await Promise.all([
+    readDone(), readJobs(), readCuesReady(), readGenLang(),
+  ]);
   delete jobs[key];
+  delete genLang[key];
   await Promise.all([
     chrome.storage.local.set({ [DONE_KEY]: done.filter((k) => k !== key) }),
     writeJobs(jobs),
     chrome.storage.local.set({ [CUES_KEY]: cues.filter((k) => k !== key) }),
+    chrome.storage.local.set({ [GEN_LANG_KEY]: genLang }),
   ]);
 }

@@ -102,6 +102,11 @@ async function handleGetStatus(
   videoId: string,
   msgLanguage?: string,
 ): Promise<ResponseMessage> {
+  // YouTube가 아닌 플랫폼(Weverse 등)은 오디오 캡처 경로를 사용하므로
+  // 이전 실패 기록 등 stale 상태가 있어도 none으로 처리한다
+  if (platform !== "youtube") {
+    return { type: "STATUS_OK", status: { state: "none" } };
+  }
   const settings = await getSettings();
   // 호출자가 language를 직접 전달하면 우선 사용 — storage 쓰기 완료 전 race condition 방지
   const language = msgLanguage ?? settings.language;

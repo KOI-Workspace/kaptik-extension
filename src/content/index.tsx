@@ -309,34 +309,36 @@ class SubtitleController {
         };
         this.startStreamingFn = () => { /* 라이브는 재시작 없음 */ };
 
-        // alwaysCapture 플랫폼(Weverse 등)은 팝업 열기가 캡처 시작의 트리거.
-        // tabCapture.getMediaStreamId는 extension이 invoke된 탭(팝업 클릭)에서만 허용되므로,
-        // 자동 시작하면 항상 권한 오류가 발생한다.
-        if (!this.adapter.alwaysCapture) {
+        if (this.adapter.alwaysCapture) {
+          // alwaysCapture 플랫폼(Weverse 등): 팝업 "Start" 버튼이 유일한 캡처 시작 트리거.
+          // pause/playing 이벤트로 자동 중단/재시작하지 않는다 — 버퍼링이나 잠깐 멈춤에도
+          // 캡처가 끊기지 않도록, 세션은 페이지 이탈 시까지 유지한다.
+          this.videoCleanup = () => {};
+        } else {
+          // YouTube 라이브: 자동 시작 + 일시정지/재생에 따라 캡처 중단/재개
           startLive();
+
+          // 3초 딜레이: 짧은 버퍼링(pause → playing)을 진짜 정지로 오인해 재시작하는 것 방지
+          let pauseTimer: number | undefined;
+          const onPaused = () => {
+            clearTimeout(pauseTimer);
+            pauseTimer = window.setTimeout(() => {
+              streamingActive = false;
+              chrome.runtime.sendMessage({ type: "STOP_LIVE_STREAMING" }).catch(() => {});
+            }, 3000);
+          };
+          const onPlaying = () => {
+            clearTimeout(pauseTimer);
+            startLive();
+          };
+
+          video.addEventListener("pause", onPaused);
+          video.addEventListener("playing", onPlaying);
+          this.videoCleanup = () => {
+            video.removeEventListener("pause", onPaused);
+            video.removeEventListener("playing", onPlaying);
+          };
         }
-
-        // 일시정지/재생에 따라 캡처 중단/재개
-        // 3초 딜레이: 짧은 버퍼링(pause → playing)을 진짜 정지로 오인해 재시작하는 것 방지
-        let pauseTimer: number | undefined;
-        const onPaused = () => {
-          clearTimeout(pauseTimer);
-          pauseTimer = window.setTimeout(() => {
-            streamingActive = false;
-            chrome.runtime.sendMessage({ type: "STOP_LIVE_STREAMING" }).catch(() => {});
-          }, 3000);
-        };
-        const onPlaying = () => {
-          clearTimeout(pauseTimer);
-          startLive();
-        };
-
-        video.addEventListener("pause", onPaused);
-        video.addEventListener("playing", onPlaying);
-        this.videoCleanup = () => {
-          video.removeEventListener("pause", onPaused);
-          video.removeEventListener("playing", onPlaying);
-        };
       } else {
         // ── VOD 경로: YouTube WS 스트리밍 ──
         const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;

@@ -188,12 +188,16 @@ class SubtitleController {
       // 같은 영상, 같은 패널이면 유지 (video 요소가 일시적으로 null이어도 세션 유지)
       // YouTube SPA가 video 요소를 새 인스턴스로 교체한 경우에만 재마운트
       const currentVideo = this.adapter.getVideoElement();
-      if (
-        this.mounted?.videoId === videoId &&
-        this.mounted.panelContainer === panelContainer &&
-        (this.mounted.video === currentVideo || currentVideo == null)
-      ) {
-        return;
+      if (this.mounted?.videoId === videoId) {
+        // alwaysCapture 사이트(Weverse 등): React SPA가 DOM을 자주 교체하므로
+        // DOM 참조 비교 없이 videoId만 확인한다 (오디오 캡처는 탭 단위라 영향 없음)
+        if (this.adapter.alwaysCapture) return;
+        if (
+          this.mounted.panelContainer === panelContainer &&
+          (this.mounted.video === currentVideo || currentVideo == null)
+        ) {
+          return;
+        }
       }
 
       // (재)마운트 준비

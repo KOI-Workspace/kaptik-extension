@@ -40,6 +40,8 @@ interface LiveSession {
   captureStartVideoTime: number;
   cues: SubtitleCue[];
   pending: Map<number, { text_ko: string; speaker: string; cached: boolean }>;
+  /** content의 현재 재생 위치를 주기적으로 offscreen에 전달하는 타이머 (타임싱크용) */
+  timeSyncTimer?: ReturnType<typeof setInterval>;
 }
 const liveSessions = new Map<number, LiveSession>();
 
@@ -353,6 +355,7 @@ async function handleStartLiveStreaming(
   }
   // 다른 영상의 기존 세션 정리
   if (prev) {
+    if (prev.timeSyncTimer) clearInterval(prev.timeSyncTimer);
     chrome.runtime.sendMessage({ type: "STOP_CAPTURE" }).catch(() => {});
     liveSessions.delete(tabId);
   }
@@ -405,6 +408,18 @@ async function handleStartLiveStreaming(
     captureStartSec: captureStartVideoTime,
   }).catch(() => {});
 
+  // content의 현재 재생 위치(초)를 0.5초마다 받아 offscreen에 전달 → 서버가 자막을 영상 위치에 정확히 꽂음.
+  // 점프(seek)해도 다음 폴링에서 즉시 반영되므로 라이브 되감기/VOD 앞뒤 점프 모두 정렬됨.
+  session.timeSyncTimer = setInterval(() => {
+    chrome.tabs.sendMessage(tabId, { type: "GET_VIDEO_TIME" })
+      .then((t: unknown) => {
+        if (typeof t === "number" && Number.isFinite(t)) {
+          chrome.runtime.sendMessage({ type: "UPDATE_VIDEO_TIME", videoMs: Math.round(t * 1000) }).catch(() => {});
+        }
+      })
+      .catch(() => { /* content script 미응답 무시 */ });
+  }, 500);
+
   console.info(`[Kaptik BG Live] 라이브 스트리밍 시작 tabId=${tabId} platform=${platform} sessionId=${sessionId}`);
   return { type: "STREAMING_STARTED" };
 }
@@ -412,6 +427,7 @@ async function handleStartLiveStreaming(
 function handleStopLiveStreaming(tabId: number): void {
   const session = liveSessions.get(tabId);
   if (!session) return;
+  if (session.timeSyncTimer) clearInterval(session.timeSyncTimer);
   chrome.runtime.sendMessage({ type: "STOP_CAPTURE" }).catch(() => {});
   liveSessions.delete(tabId);
 

@@ -25,6 +25,14 @@ let scriptProcessor: ScriptProcessorNode | null = null;
 // 탭 캡처 시 원본 탭이 음소거되므로 Audio 요소로 원음질 복원
 let playbackEl: HTMLAudioElement | null = null;
 
+// ── 타임싱크: 자막을 영상의 정확한 위치에 꽂기 위한 상태 ──
+// 캡처 시작부터 서버로 보낸 누적 오디오 길이(ms). 서버의 Soniox start_ms와 같은 기준.
+let sentAudioMs = 0;
+// background가 주기적으로 알려주는 현재 영상 재생 위치(ms). 점프 시 즉시 반영됨.
+let latestVideoMs = 0;
+// 마지막으로 time_sync 마커를 보낸 시점의 sentAudioMs (전송 주기 제어용)
+let lastSyncAudioMs = 0;
+
 async function startCapture(msg: CaptureTabMsg): Promise<void> {
   stopCapture();
 
@@ -49,6 +57,11 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
   }
 
   activeStream = stream;
+
+  // 타임싱크 상태 초기화 (캡처 시작 위치를 첫 영상 위치로)
+  sentAudioMs = 0;
+  lastSyncAudioMs = 0;
+  latestVideoMs = (msg.captureStartSec ?? 0) * 1000;
 
   // 탭 캡처 시 원본 탭이 음소거됨 → Audio 요소로 원음질 그대로 복원
   playbackEl = new Audio();
@@ -88,6 +101,19 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
         i16[i] = Math.max(-32768, Math.min(32767, Math.round(f32[i] * 32767)));
       }
       ws.send(i16.buffer);
+      // 16 kHz mono → 16 samples = 1 ms. 누적 오디오 길이 추적
+      sentAudioMs += f32.length / 16;
+      // 약 500 ms마다 (오디오 위치, 영상 위치) 마커 전송 → 서버가 자막 ts를 영상 위치로 역산
+      if (sentAudioMs - lastSyncAudioMs >= 500) {
+        lastSyncAudioMs = sentAudioMs;
+        ws.send(
+          JSON.stringify({
+            type: "time_sync",
+            audio_ms: Math.round(sentAudioMs),
+            video_ms: Math.round(latestVideoMs),
+          }),
+        );
+      }
     };
 
     source.connect(scriptProcessor);
@@ -135,14 +161,22 @@ function stopCapture(): void {
   activeWs = null;
   activeStream?.getTracks().forEach((t) => t.stop());
   activeStream = null;
+  sentAudioMs = 0;
+  lastSyncAudioMs = 0;
+  latestVideoMs = 0;
 }
 
 chrome.runtime.onMessage.addListener(
-  (msg: { type: string } & Partial<CaptureTabMsg>) => {
+  (msg: { type: string; videoMs?: number } & Partial<CaptureTabMsg>) => {
     if (msg.type === "CAPTURE_TAB") {
       void startCapture(msg as CaptureTabMsg);
     } else if (msg.type === "STOP_CAPTURE") {
       stopCapture();
+    } else if (msg.type === "UPDATE_VIDEO_TIME") {
+      // background가 0.5초마다 보내는 현재 영상 위치 — 점프 시 즉시 반영
+      if (typeof msg.videoMs === "number" && Number.isFinite(msg.videoMs)) {
+        latestVideoMs = msg.videoMs;
+      }
     }
   },
 );

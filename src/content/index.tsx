@@ -60,11 +60,12 @@ class SubtitleController {
 
   constructor(private adapter: SiteAdapter) {}
 
-  /** 현재 마운트된 영상의 재생 위치(초). 없으면 페이지의 video 폴백, 그래도 없으면 0. */
+  /** 현재 마운트된 영상의 재생 위치(초, 소수 포함). 없으면 페이지의 video 폴백, 그래도 없으면 0.
+   * 타임싱크 폴링이 영상 위치를 정확히 추적해야 하므로 floor하지 않는다. */
   getCurrentVideoTime(): number {
-    if (this.mounted) return Math.floor(this.mounted.video.currentTime);
+    if (this.mounted) return this.mounted.video.currentTime;
     const v = document.querySelector("video");
-    return v ? Math.floor(v.currentTime) : 0;
+    return v ? v.currentTime : 0;
   }
 
   async start() {

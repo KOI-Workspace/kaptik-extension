@@ -58,16 +58,22 @@ export const weverseAdapter: SiteAdapter = {
 
   /**
    * 광고 재생 여부.
-   * 위버스 본편 영상은 blob: URL(MSE)에서 재생되고, 광고는 구글 광고 CDN(redirector.gvt1.com 등)의
-   * 일반 https URL에서 재생된다. 그래서 "blob이 아닌 src로 현재 재생 중인 video"가 있으면 광고로 판정한다.
+   * 위버스 본편 영상은 blob: URL(MSE)에서 재생되고, 광고는 일반 https URL(구글 광고 CDN 등)에서
+   * 재생된다(실제 로그 확인: 본편=blob:weverse.io, 광고=https://redirector.gvt1.com).
    * 광고는 별도 video 요소를 쓰므로 페이지의 모든 video를 훑는다.
-   * (실제 로그로 확인: 본편=blob:weverse.io, 광고=https://redirector.gvt1.com)
+   *
+   * 오판(본편/미리보기를 광고로 착각) 방지를 위해 아래를 모두 만족해야 광고로 본다:
+   * - src가 blob:(위버스 본편)이 아님
+   * - 실제 재생 중(일시정지/종료 아님)이고 미디어가 로딩됨
+   * - 음소거가 아님(소리 남) — 음소거된 자동재생 썸네일 등을 광고로 오판하지 않도록.
+   *   (음소거 광고는 탭 소리 자체가 무음이라 어차피 자막이 안 생기므로 제외해도 안전)
+   * 이 방식은 구글이 아닌 광고 업체여도 "blob 아닌 소리나는 영상"으로 잡아낸다.
    */
   isAdPlaying() {
     return Array.from(document.querySelectorAll("video")).some((v) => {
       const src = v.currentSrc || "";
-      const isAdSrc = src !== "" && !src.startsWith("blob:");
-      return isAdSrc && !v.paused && !v.ended;
+      if (!src || src.startsWith("blob:")) return false; // 본편(weverse blob)
+      return !v.paused && !v.ended && !v.muted && v.readyState >= 2;
     });
   },
 };

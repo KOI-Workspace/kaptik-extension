@@ -8,7 +8,10 @@ export type RequestMessage =
   | { type: "START_STREAMING"; youtubeUrl: string; seekSec: number; serverUrl: string; keepCues?: boolean; language?: string }
   | { type: "STOP_STREAMING" }
   | { type: "START_LIVE_STREAMING"; platform: Platform; videoId: string; captureStartVideoTime: number; videoTitle?: string; videoUrl?: string; tabId?: number }
-  | { type: "STOP_LIVE_STREAMING" };
+  | { type: "STOP_LIVE_STREAMING" }
+  // content가 "내 탭에 라이브 캡처 세션이 있나?"를 조회한다.
+  // alwaysCapture(Weverse) 자막 UI를 Start 이후에만 마운트하기 위한 단일 진실 소스.
+  | { type: "IS_LIVE_ACTIVE" };
 
 /** background → 요청자 응답 메시지 */
 export type ResponseMessage =
@@ -16,6 +19,7 @@ export type ResponseMessage =
   | { type: "STATUS_OK"; status: SubtitleStatus }
   | { type: "GENERATION_STARTED"; etaSeconds: number }
   | { type: "STREAMING_STARTED" }
+  | { type: "LIVE_ACTIVE"; active: boolean }
   | { type: "ERR"; error: string };
 
 /** background → content 브로드캐스트 */
@@ -24,7 +28,10 @@ export type BroadcastMessage =
   | { type: "CUES_ALL_READY"; platform: Platform; videoId: string }
   | { type: "CUE_READY"; videoId: string; cues: SubtitleCue[] }
   | { type: "STREAMING_ERROR"; message: string }
-  | { type: "SPEAKER_IDENTIFIED"; speakerId: string; name: string; member: Member };
+  | { type: "SPEAKER_IDENTIFIED"; speakerId: string; name: string; member: Member }
+  // alwaysCapture 캡처 세션 시작/종료 알림 → content가 자막 UI를 즉시 마운트/언마운트
+  | { type: "LIVE_CAPTURE_STARTED"; videoId: string }
+  | { type: "LIVE_CAPTURE_STOPPED"; videoId: string };
 
 /** sendMessage 를 Promise로 감싸는 헬퍼 */
 function send<R extends ResponseMessage>(
@@ -72,4 +79,10 @@ export async function startGeneration(
 ): Promise<number | null> {
   const res = await send({ type: "START_GENERATION", platform, videoId, force, language });
   return res?.type === "GENERATION_STARTED" ? res.etaSeconds : null;
+}
+
+/** 현재 탭에 라이브 캡처 세션이 활성 상태인지 조회한다. (Weverse 자막 UI 마운트 조건) */
+export async function isLiveActive(): Promise<boolean> {
+  const res = await send({ type: "IS_LIVE_ACTIVE" });
+  return res?.type === "LIVE_ACTIVE" ? res.active : false;
 }

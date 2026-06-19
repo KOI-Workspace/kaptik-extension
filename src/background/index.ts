@@ -351,6 +351,8 @@ async function handleStartLiveStreaming(
   const prev = liveSessions.get(tabId);
   if (prev && prev.videoId === videoId) {
     console.info(`[Kaptik BG Live] 이미 활성 세션 있음 (dedup) tabId=${tabId} videoId=${videoId}`);
+    // 이미 캡처 중이어도 content가 (재주입 등으로) 아직 마운트 안 했을 수 있으므로 알림
+    chrome.tabs.sendMessage(tabId, { type: "LIVE_CAPTURE_STARTED", videoId } satisfies BroadcastMessage).catch(() => {});
     return { type: "STREAMING_STARTED" };
   }
   // 다른 영상의 기존 세션 정리
@@ -435,6 +437,8 @@ async function handleStartLiveStreaming(
   }, 500);
 
   console.info(`[Kaptik BG Live] 라이브 스트리밍 시작 tabId=${tabId} platform=${platform} sessionId=${sessionId}`);
+  // content가 자막 UI를 즉시 마운트하도록 알림 (1500ms 주기 evaluate를 기다리지 않음)
+  chrome.tabs.sendMessage(tabId, { type: "LIVE_CAPTURE_STARTED", videoId } satisfies BroadcastMessage).catch(() => {});
   return { type: "STREAMING_STARTED" };
 }
 
@@ -443,6 +447,8 @@ function handleStopLiveStreaming(tabId: number): void {
   if (!session) return;
   if (session.timeSyncTimer) clearInterval(session.timeSyncTimer);
   chrome.runtime.sendMessage({ type: "STOP_CAPTURE" }).catch(() => {});
+  // content가 자막 UI를 즉시 언마운트하도록 알림
+  chrome.tabs.sendMessage(tabId, { type: "LIVE_CAPTURE_STOPPED", videoId: session.videoId } satisfies BroadcastMessage).catch(() => {});
   liveSessions.delete(tabId);
 
   // 다른 라이브 세션이 없으면 오프스크린 닫기
@@ -685,6 +691,10 @@ chrome.runtime.onMessage.addListener(
             const tabId = sender.tab?.id;
             if (tabId) handleStopLiveStreaming(tabId);
             return { type: "ERR", error: "" };
+          }
+          case "IS_LIVE_ACTIVE": {
+            const tabId = sender.tab?.id;
+            return { type: "LIVE_ACTIVE", active: tabId != null && liveSessions.has(tabId) };
           }
           default:
             return { type: "ERR", error: "알 수 없는 메시지" };

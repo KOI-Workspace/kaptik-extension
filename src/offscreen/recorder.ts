@@ -48,6 +48,11 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
 
   activeStream = stream;
 
+  // 탭 캡처 시 원본 탭이 음소거됨 → Audio 요소로 원음질 그대로 복원
+  playbackEl = new Audio();
+  playbackEl.srcObject = stream;
+  void playbackEl.play();
+
   const token = msg.authToken
     ? `?token=${encodeURIComponent(msg.authToken)}`
     : "";
@@ -66,7 +71,7 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
       }),
     );
 
-    // 16 kHz mono AudioContext for PCM-16 resampling
+    // 16 kHz mono AudioContext for PCM-16 resampling (STT 전용)
     audioCtx = new AudioContext({ sampleRate: 16000 });
     const source = audioCtx.createMediaStreamSource(stream);
     // 4 096-sample frames @ 16 kHz ≈ 256 ms per chunk
@@ -83,8 +88,12 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
     };
 
     source.connect(scriptProcessor);
-    // ScriptProcessor requires a destination to fire onaudioprocess
-    scriptProcessor.connect(audioCtx.destination);
+    // onaudioprocess를 트리거하려면 destination 연결 필요.
+    // GainNode gain=0으로 묵음 처리해 Audio 요소와 중복 재생 방지
+    const silentGain = audioCtx.createGain();
+    silentGain.gain.value = 0;
+    scriptProcessor.connect(silentGain);
+    silentGain.connect(audioCtx.destination);
   };
 
   ws.onmessage = (e) => {
@@ -113,6 +122,8 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
 }
 
 function stopCapture(): void {
+  playbackEl?.pause();
+  playbackEl = null;
   scriptProcessor?.disconnect();
   scriptProcessor = null;
   void audioCtx?.close();

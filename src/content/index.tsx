@@ -81,6 +81,11 @@ class SubtitleController {
     return v ? v.currentTime : 0;
   }
 
+  /** 현재 광고 재생 중인지 — 백그라운드 캡처 루프가 0.5초마다 물어 무음 처리 판단에 쓴다. */
+  isAdPlaying(): boolean {
+    return this.adapter.isAdPlaying?.() ?? false;
+  }
+
   async start() {
     this.settings = await getSettings();
 
@@ -375,28 +380,6 @@ class SubtitleController {
           };
         }
 
-        // 광고 감지 → 광고 중엔 offscreen이 서버로 무음을 보내도록 통보.
-        // (위버스 pre-roll/mid-roll 광고 음성이 자막으로 만들어지는 것을 방지)
-        // 사용자가 듣는 소리는 그대로이고, 서버로 가는 복사본만 무음 처리된다.
-        if (this.adapter.isAdPlaying) {
-          let lastAd: boolean | null = null;
-          const checkAd = () => {
-            const isAd = this.adapter.isAdPlaying?.() ?? false;
-            if (isAd === lastAd) return;
-            lastAd = isAd;
-            chrome.runtime.sendMessage({ type: "SET_AD_MUTED", muted: isAd }).catch(() => {});
-            console.info(`[Kaptik] 광고 ${isAd ? "감지 → 무음 전송" : "종료 → 캡처 재개"}`);
-          };
-          const adTimer = window.setInterval(checkAd, 300);
-          checkAd();
-          const prevCleanup = this.videoCleanup;
-          this.videoCleanup = () => {
-            clearInterval(adTimer);
-            // 정리 시 무음 상태가 남지 않도록 해제 통보
-            chrome.runtime.sendMessage({ type: "SET_AD_MUTED", muted: false }).catch(() => {});
-            prevCleanup?.();
-          };
-        }
       } else {
         // ── VOD 경로: YouTube WS 스트리밍 ──
         const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -492,6 +475,15 @@ chrome.runtime.onMessage.addListener(
   (message: unknown, _sender, sendResponse) => {
     if ((message as Record<string, unknown>)?.type !== "GET_VIDEO_TIME") return;
     sendResponse(activeController?.getCurrentVideoTime() ?? 0);
+    return true;
+  },
+);
+
+// 백그라운드 캡처 루프가 0.5초마다 광고 여부를 물어본다 (광고 중이면 서버로 무음 전송).
+chrome.runtime.onMessage.addListener(
+  (message: unknown, _sender, sendResponse) => {
+    if ((message as Record<string, unknown>)?.type !== "GET_AD_STATE") return;
+    sendResponse(activeController?.isAdPlaying() ?? false);
     return true;
   },
 );

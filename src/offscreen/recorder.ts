@@ -27,6 +27,10 @@ let playbackEl: HTMLAudioElement | null = null;
 // 광고 재생 중이면 true — 서버로 보내는 오디오만 무음(0)으로 채운다.
 // (사용자가 듣는 소리/탭 재생에는 영향 없음. 서버 전송 복사본만 무음 처리)
 let adMuted = false;
+// 무음을 시작한 시각(ms). 신호가 꼬여 무음이 비정상적으로 오래 지속되면 강제 해제하기 위함.
+let adMutedSince = 0;
+// 무음 최대 지속 시간(ms). 실제 광고는 15~30초이므로 이를 넘으면 신호 꼬임으로 보고 해제.
+const MAX_AD_MUTE_MS = 60000;
 
 // ── 타임싱크: 자막을 영상의 정확한 위치에 꽂기 위한 상태 ──
 // 캡처 시작부터 서버로 보낸 누적 오디오 길이(ms). 서버의 Soniox start_ms와 같은 기준.
@@ -64,6 +68,7 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
   // 안전장치: 새 캡처 시작 시 무음 상태를 반드시 해제 (이전 세션의 광고 무음이 남아
   // 본편 자막이 영영 안 만들어지는 것을 방지)
   adMuted = false;
+  adMutedSince = 0;
 
   // 타임싱크 상태 초기화 (캡처 시작 위치를 첫 영상 위치로)
   sentAudioMs = 0;
@@ -104,6 +109,12 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
       if (ws.readyState !== WebSocket.OPEN) return;
       const f32 = e.inputBuffer.getChannelData(0);
       const i16 = new Int16Array(f32.length);
+      // 안전장치: 무음이 비정상적으로 오래(60초+) 지속되면 신호 꼬임으로 보고 강제 해제.
+      // (광고 종료 신호 유실 등으로 본편 자막이 영영 안 만들어지는 최악 상황 방지)
+      if (adMuted && adMutedSince > 0 && Date.now() - adMutedSince > MAX_AD_MUTE_MS) {
+        adMuted = false;
+  adMutedSince = 0;
+      }
       // 광고 중이 아닐 때만 실제 오디오를 채운다. 광고 중이면 i16은 0(무음)인 채로 전송 →
       // 광고 음성이 STT로 가지 않는다. 오디오 시계(sentAudioMs)는 계속 진행해 타임싱크 유지.
       if (!adMuted) {
@@ -176,6 +187,7 @@ function stopCapture(): void {
   lastSyncAudioMs = 0;
   latestVideoMs = 0;
   adMuted = false;
+  adMutedSince = 0;
 }
 
 chrome.runtime.onMessage.addListener(
@@ -191,7 +203,9 @@ chrome.runtime.onMessage.addListener(
       }
     } else if (msg.type === "SET_CAPTURE_MUTED") {
       // 광고 구간 무음 처리 on/off
-      adMuted = Boolean(msg.muted);
+      const next = Boolean(msg.muted);
+      if (next && !adMuted) adMutedSince = Date.now(); // 무음 시작 시각 기록
+      adMuted = next;
     }
   },
 );

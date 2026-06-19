@@ -410,12 +410,26 @@ async function handleStartLiveStreaming(
 
   // content의 현재 재생 위치(초)를 0.5초마다 받아 offscreen에 전달 → 서버가 자막을 영상 위치에 정확히 꽂음.
   // 점프(seek)해도 다음 폴링에서 즉시 반영되므로 라이브 되감기/VOD 앞뒤 점프 모두 정렬됨.
+  let lastAdState: boolean | null = null;
   session.timeSyncTimer = setInterval(() => {
     chrome.tabs.sendMessage(tabId, { type: "GET_VIDEO_TIME" })
       .then((t: unknown) => {
         if (typeof t === "number" && Number.isFinite(t)) {
           chrome.runtime.sendMessage({ type: "UPDATE_VIDEO_TIME", videoMs: Math.round(t * 1000) }).catch(() => {});
         }
+      })
+      .catch(() => { /* content script 미응답 무시 */ });
+
+    // 광고 여부를 같은 주기로 물어 offscreen 무음 처리.
+    // 캡처 세션이 도는 한 항상 실행되므로 자동 재개/재진입에도 작동한다.
+    chrome.tabs.sendMessage(tabId, { type: "GET_AD_STATE" })
+      .then((isAd: unknown) => {
+        if (typeof isAd !== "boolean") return;
+        if (isAd !== lastAdState) {
+          lastAdState = isAd;
+          console.info(`[Kaptik BG Live] 광고 ${isAd ? "감지 → 무음 처리" : "종료 → 캡처 재개"} (tab ${tabId})`);
+        }
+        chrome.runtime.sendMessage({ type: "SET_CAPTURE_MUTED", muted: isAd }).catch(() => {});
       })
       .catch(() => { /* content script 미응답 무시 */ });
   }, 500);
@@ -670,17 +684,6 @@ chrome.runtime.onMessage.addListener(
           case "STOP_LIVE_STREAMING": {
             const tabId = sender.tab?.id;
             if (tabId) handleStopLiveStreaming(tabId);
-            return { type: "ERR", error: "" };
-          }
-          case "SET_AD_MUTED": {
-            // 광고 무음 신호: 보낸 탭이 실제 캡처 중인 세션일 때만 offscreen에 전달.
-            // (캡처 안 하는 다른 위버스 탭의 광고가 활성 세션을 잘못 음소거하는 것 방지)
-            const tabId = sender.tab?.id;
-            if (tabId != null && liveSessions.has(tabId)) {
-              chrome.runtime
-                .sendMessage({ type: "SET_CAPTURE_MUTED", muted: req.muted })
-                .catch(() => {});
-            }
             return { type: "ERR", error: "" };
           }
           default:

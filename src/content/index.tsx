@@ -1,7 +1,7 @@
 import type { SiteAdapter } from "./siteAdapters";
 import { resolveAdapter } from "./siteAdapters";
 import type { BroadcastMessage } from "@/shared/messaging";
-import { requestStatus } from "@/shared/messaging";
+import { requestStatus, isLiveActive } from "@/shared/messaging";
 import {
   DEFAULT_SETTINGS,
   getSettings,
@@ -177,6 +177,12 @@ class SubtitleController {
           this.mounted.lastVodCues = [];
           this.mounted.vodCuesReady = false;
         }
+      } else if (message?.type === "LIVE_CAPTURE_STARTED") {
+        // 팝업 Start로 캡처 세션이 시작됨 → 1500ms 주기를 기다리지 않고 즉시 마운트 평가
+        void this.evaluate();
+      } else if (message?.type === "LIVE_CAPTURE_STOPPED") {
+        // 캡처 세션 종료 → 자막 UI 즉시 언마운트
+        if (this.mounted?.videoId === message.videoId) this.teardown();
       }
     });
 
@@ -313,6 +319,17 @@ class SubtitleController {
           return;
         }
         speakerIdentified = vodStatus?.state === "available" ? (vodStatus.speakerIdentifiable ?? true) : true;
+      }
+
+      // alwaysCapture(Weverse): 팝업 "Create Subtitles"로 캡처 세션이 시작된 경우에만 마운트한다.
+      // 라이브/다시보기, 이전 자막 생성 이력과 무관하게 Start 전에는 자막 UI를 띄우지 않는다.
+      // (새로고침 후에도 세션이 살아있으면 active=true라 자동 복구된다)
+      if (useCapture && this.adapter.alwaysCapture) {
+        const active = await isLiveActive();
+        if (!active) {
+          this.teardown();
+          return;
+        }
       }
 
       // 빈 트랙으로 먼저 마운트한 뒤 스트리밍으로 cue를 채운다

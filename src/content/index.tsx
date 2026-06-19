@@ -253,6 +253,14 @@ class SubtitleController {
         return;
       }
 
+      // 우측 패널을 도킹할 사이드 컬럼.
+      // 위버스 등 SPA는 이 컬럼(채팅/댓글 영역)이 영상보다 늦게 렌더돼, 마운트 순간에
+      // 못 찾으면 패널이 가끔 영상 위 오버레이로 빠졌다. 마운트 직전에 잠깐만(최대 1.5초)
+      // 기다려 그 타이밍 문제를 없앤다. 그래도 없으면 기존대로 null → 오버레이 폴백.
+      // (마운트 '후'에는 재탐색하지 않는다 — 댓글이 다 로드된 뒤의 거대 본문 컬럼을 잘못 집는 것을 방지)
+      const dockColumn =
+        (await waitFor(() => this.adapter.getPanelContainer(), 1500)) ?? panelContainer;
+
       // URL은 /live/ 경로여도 종료된 라이브(다시보기)는 녹화(replay)다. video.duration으로 실제 판정.
       const urlIsLive = this.adapter.isLive?.(location.href) ?? false;
       const isLive = detectLiveFromVideo(video, urlIsLive);
@@ -287,8 +295,8 @@ class SubtitleController {
             members: {},
             error: vodStatus.reason,
           };
-          const handle = mountDisplay(container, panelContainer, video, errorTrack, false);
-          this.mounted = { videoId, panelContainer, handle, video, isLive: false, vodCuesReady: false, lastVodCues: [] };
+          const handle = mountDisplay(container, dockColumn, video, errorTrack, false);
+          this.mounted = { videoId, panelContainer: dockColumn, handle, video, isLive: false, vodCuesReady: false, lastVodCues: [] };
           console.info(`[Kaptik] 자막 생성 불가 (${videoId}): ${vodStatus.reason ?? "unknown"}`);
           return;
         }
@@ -311,8 +319,8 @@ class SubtitleController {
         members: {},
         speakerIdentified,
       };
-      const handle = mountDisplay(container, panelContainer, video, emptyTrack, isLive);
-      this.mounted = { videoId, panelContainer, handle, video, isLive, vodCuesReady: false, lastVodCues: [] };
+      const handle = mountDisplay(container, dockColumn, video, emptyTrack, isLive);
+      this.mounted = { videoId, panelContainer: dockColumn, handle, video, isLive, vodCuesReady: false, lastVodCues: [] };
 
       if (useCapture) {
         // ── 라이브 경로: 탭 오디오 캡처 → 오프스크린 → 백엔드 WS ──

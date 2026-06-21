@@ -44,7 +44,7 @@ interface LiveSubtitlesResponse {
   target_lang: string;
   subtitles: Array<{
     text_ko: string;
-    text_en: string;
+    translation: string;
     speaker: string;
     ts: number;
     annotations?: Annotation[];
@@ -110,7 +110,7 @@ export async function fetchLiveSubtitles(opts: {
       start: Math.max(0, Number(sub.ts) / 1000),
       end: Math.max(0, Number(sub.ts) / 1000) + 6,
       speakerId: sub.speaker || undefined,
-      text: { ko: sub.text_ko, [opts.targetLang]: sub.text_en },
+      text: { ko: sub.text_ko, [opts.targetLang]: sub.translation },
       annotations: sub.annotations ?? [],
     }))
     .sort((a, b) => a.start - b.start)

@@ -229,7 +229,7 @@ async function handleGetStatus(
   // YouTube가 아닌 플랫폼(Weverse 등)은 오디오 캡처 경로를 사용한다.
   // - 활성 세션 + 번역 자막(cue) 1개 이상 도착 → "available" (설정 패널 표시)
   // - 활성 세션 있으나 아직 첫 자막 전 → "generating" (캡처 중, 첫 자막 대기)
-  // - 세션 없음 → "none" (Start 버튼 표시)
+  // - 세션 없음 → "none" (Start 버튼 표시 — 새로고침/재진입 후 항상 Start를 다시 눌러야 함)
   if (platform !== "youtube") {
     const session = [...liveSessions.values()].find(
       (s) => s.platform === platform && s.videoId === videoId,
@@ -237,16 +237,7 @@ async function handleGetStatus(
     const settings = await getSettings();
     const language = msgLanguage ?? settings.language;
     if (!session) {
-      const storedCues = await readLiveCues(platform, videoId, language);
-      const serverCues = storedCues.length > 0
-        ? []
-        : await fetchStoredLiveCuesFromServer(platform, videoId, language, videoUrl);
-      return {
-        type: "STATUS_OK",
-        status: storedCues.length > 0 || serverCues.length > 0
-          ? { state: "available" }
-          : { state: "none" },
-      };
+      return { type: "STATUS_OK", status: { state: "none" } };
     }
     // 현재 언어 칠판에 cue가 하나라도 있으면 available (언어를 방금 바꿔서 아직 새 cue가 없더라도
     // 이전에 해당 언어로 쌓인 게 있으면 available로 처리 — 화면에 이미 복원돼 있음)

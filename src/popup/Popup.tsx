@@ -216,10 +216,10 @@ export function Popup() {
       return;
     }
 
-    // YouTube VOD: 새 언어로 강제 재생성
+    // YouTube VOD: 새 언어로 전환 — 서버에 이미 해당 언어 자막이 있으면 캐시 재사용
     prevStatusStateRef.current = "generating";
     setStatus({ state: "generating", etaSeconds: 0, progress: 0 });
-    void startGeneration(target.platform, target.videoId, true, newLang).then((eta) => {
+    void startGeneration(target.platform, target.videoId, false, newLang).then((eta) => {
       if (eta === null) {
         setStatus({ state: "failed" });
       } else {

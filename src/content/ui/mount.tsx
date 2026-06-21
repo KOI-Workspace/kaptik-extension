@@ -53,6 +53,7 @@ export function mountDisplay(
   track: SubtitleTrack,
   isLive = false,
   getIsAdPlaying?: () => boolean,
+  preferLatestCue = false,
 ): DisplayHandle {
   // 중복 마운트 방지
   overlayContainer.querySelector(`#${OVERLAY_HOST_ID}`)?.remove();
@@ -109,6 +110,7 @@ export function mountDisplay(
         panelDocked={panelDocked}
         isLive={isLive}
         getIsAdPlaying={getIsAdPlaying}
+        preferLatestCue={preferLatestCue}
       />
     );
   }

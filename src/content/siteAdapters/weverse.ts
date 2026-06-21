@@ -70,10 +70,24 @@ export const weverseAdapter: SiteAdapter = {
    * 이 방식은 구글이 아닌 광고 업체여도 "blob 아닌 소리나는 영상"으로 잡아낸다.
    */
   isAdPlaying() {
-    return Array.from(document.querySelectorAll("video")).some((v) => {
+    const pageText = document.body?.innerText?.slice(0, 3000) ?? "";
+    if (/\b(skip ad|sponsored|advertisement)\b/i.test(pageText) || /광고\s*건너뛰기/.test(pageText)) {
+      return true;
+    }
+
+    const videos = Array.from(document.querySelectorAll("video"));
+    return videos.some((v) => {
       const src = v.currentSrc || "";
+      const isPlaying = !v.paused && !v.ended && !v.muted && v.readyState >= 2;
+      if (!isPlaying) return false;
+
+      const rect = v.getBoundingClientRect();
+      const isVisible = rect.width > 80 && rect.height > 45;
+      if (!isVisible) return false;
+
+      if (/doubleclick|googlesyndication|gvt1|googlevideo|adservice/i.test(src)) return true;
       if (!src || src.startsWith("blob:")) return false; // 본편(weverse blob)
-      return !v.paused && !v.ended && !v.muted && v.readyState >= 2;
+      return true;
     });
   },
 };

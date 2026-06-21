@@ -39,10 +39,16 @@ export function useSettings(): KaptikSettings {
 export function useActiveIndex(
   video: HTMLVideoElement,
   cues: SubtitleCue[],
+  preferLatestCue = false,
 ): number {
   const [index, setIndex] = useState(-1);
 
   useEffect(() => {
+    if (preferLatestCue) {
+      setIndex(cues.length > 0 ? cues.length - 1 : -1);
+      return;
+    }
+
     let rafId = 0;
     let last = -2;
 
@@ -64,7 +70,7 @@ export function useActiveIndex(
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [video, cues]);
+  }, [video, cues, preferLatestCue]);
 
   return index;
 }

@@ -363,8 +363,11 @@ class SubtitleController {
       if (useCapture && this.adapter.alwaysCapture) {
         const active = await isLiveActive();
         if (!active) {
-          this.teardown();
-          return;
+          const storedStatus = await requestStatus(this.adapter.platform, videoId, this.settings.language);
+          if (storedStatus?.state !== "available") {
+            this.teardown();
+            return;
+          }
         }
       }
 
@@ -377,11 +380,16 @@ class SubtitleController {
         members: {},
         speakerIdentified,
       };
-      const handle = mountDisplay(container, dockColumn, video, emptyTrack, isLive, () => this.isAdPlaying());
+      const handle = mountDisplay(container, dockColumn, video, emptyTrack, isLive, () => this.isAdPlaying(), useCapture);
       this.mounted = { videoId, panelContainer: dockColumn, overlayContainer: container, handle, video, isLive, vodCuesReady: false, lastVodCues: [] };
 
       if (useCapture) {
-        chrome.runtime.sendMessage({ type: "GET_LIVE_CUES" }, (res: ResponseMessage | undefined) => {
+        chrome.runtime.sendMessage({
+          type: "GET_LIVE_CUES",
+          platform: this.adapter.platform,
+          videoId,
+          language: this.settings.language,
+        }, (res: ResponseMessage | undefined) => {
           if (
             res?.type === "LIVE_CUES" &&
             res.videoId === videoId &&

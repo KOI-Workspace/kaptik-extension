@@ -1,4 +1,4 @@
-import type { Platform, SubtitleStatus } from "@/types/subtitle";
+import type { Platform, SubtitleCue, SubtitleStatus } from "@/types/subtitle";
 
 /**
  * 백엔드(Kaptik API) 개발 전까지 자막 생성 흐름을 로컬에서 시뮬레이션하는 저장소.
@@ -18,6 +18,8 @@ const DONE_KEY = "kaptik:available";
 const CUES_KEY = "kaptik:cues_ready";
 /** videoId 키 → 생성 시 사용된 언어 코드 */
 const GEN_LANG_KEY = "kaptik:gen_lang";
+const LIVE_CUES_KEY = "kaptik:live_cues";
+const MAX_LIVE_CUES_PER_LANG = 1000;
 
 interface Job {
   platform: Platform;
@@ -40,6 +42,10 @@ interface Job {
 
 function keyOf(platform: Platform, videoId: string): string {
   return `${platform}:${videoId}`;
+}
+
+function liveCueKey(platform: Platform, videoId: string, language: string): string {
+  return `${platform}:${videoId}:${language}`;
 }
 
 async function readJobs(): Promise<Record<string, Job>> {
@@ -108,6 +114,33 @@ export async function markCuesReady(platform: Platform, videoId: string): Promis
 export async function areCuesReady(platform: Platform, videoId: string): Promise<boolean> {
   const list = await readCuesReady();
   return list.includes(keyOf(platform, videoId));
+}
+
+async function readLiveCuesMap(): Promise<Record<string, SubtitleCue[]>> {
+  const r = await chrome.storage.local.get(LIVE_CUES_KEY);
+  return (r[LIVE_CUES_KEY] ?? {}) as Record<string, SubtitleCue[]>;
+}
+
+export async function readLiveCues(
+  platform: Platform,
+  videoId: string,
+  language: string,
+): Promise<SubtitleCue[]> {
+  const map = await readLiveCuesMap();
+  return map[liveCueKey(platform, videoId, language)] ?? [];
+}
+
+export async function writeLiveCues(
+  platform: Platform,
+  videoId: string,
+  language: string,
+  cues: SubtitleCue[],
+): Promise<void> {
+  const map = await readLiveCuesMap();
+  map[liveCueKey(platform, videoId, language)] = cues
+    .slice(-MAX_LIVE_CUES_PER_LANG)
+    .sort((a, b) => a.start - b.start);
+  await chrome.storage.local.set({ [LIVE_CUES_KEY]: map });
 }
 
 /** 부작용 없이 완료 여부만 확인한다 (완료 전이 감지용). */

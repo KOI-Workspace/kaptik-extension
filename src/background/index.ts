@@ -19,6 +19,8 @@ import {
   isLocalJobDone,
   markCuesReady,
   areCuesReady,
+  readLiveCues,
+  writeLiveCues,
 } from "./generationStore";
 import { StreamingSession } from "@/api/wsClient";
 import { MockStreamingSession } from "@/api/mockStreamingSession";
@@ -47,9 +49,11 @@ interface LiveSession {
   language: string;
   /** 언어별 독립 cue 배열. 언어를 바꿔도 이전 언어 내용을 버리지 않아, 돌아오면 이어서 볼 수 있다. */
   cuesByLang: Map<string, SubtitleCue[]>;
-  pending: Map<number, { text_ko: string; speaker: string; cached: boolean; startMs: number }>;
+  pending: Map<number, { text_ko: string; speaker: string; cached: boolean; startMs: number; language: string }>;
   /** 광고 구간(영상 시각 ms). startMs~endMs 사이 ts를 가진 cue는 렌더링 제외 */
   adPeriods: AdPeriod[];
+  /** 마지막으로 확인한 광고 상태. stage 메시지 도착 시 즉시 필터링에도 사용한다. */
+  isAdPlaying: boolean;
   /** 마지막으로 알려진 영상 재생 위치(ms) — 광고 구간 계산에 사용 */
   lastKnownVideoMs: number;
   /** content의 현재 재생 위치를 주기적으로 offscreen에 전달하는 타이머 (타임싱크용) */
@@ -154,6 +158,12 @@ function normalizeLiveCueStartMs(session: LiveSession, rawTs: number): number {
   return fallback;
 }
 
+function isWithinAdPeriod(session: LiveSession, startMs: number): boolean {
+  return session.adPeriods.some(
+    (period) => startMs >= period.startMs && (period.endMs === null || startMs <= period.endMs),
+  );
+}
+
 
 // ── 자막 트랙 ─────────────────────────────────────────────
 async function handleGetSubtitles(
@@ -183,11 +193,23 @@ async function handleGetStatus(
     const session = [...liveSessions.values()].find(
       (s) => s.platform === platform && s.videoId === videoId,
     );
-    if (!session) return { type: "STATUS_OK", status: { state: "none" } };
+    const settings = await getSettings();
+    const language = msgLanguage ?? settings.language;
+    if (!session) {
+      const storedCues = await readLiveCues(platform, videoId, language);
+      return {
+        type: "STATUS_OK",
+        status: storedCues.length > 0 ? { state: "available" } : { state: "none" },
+      };
+    }
     // 현재 언어 칠판에 cue가 하나라도 있으면 available (언어를 방금 바꿔서 아직 새 cue가 없더라도
     // 이전에 해당 언어로 쌓인 게 있으면 available로 처리 — 화면에 이미 복원돼 있음)
     const currentLangCues = session.cuesByLang.get(session.language) ?? [];
     if (currentLangCues.length > 0) {
+      return { type: "STATUS_OK", status: { state: "available" } };
+    }
+    const storedCues = await readLiveCues(platform, videoId, language);
+    if (storedCues.length > 0) {
       return { type: "STATUS_OK", status: { state: "available" } };
     }
     return { type: "STATUS_OK", status: { state: "generating", etaSeconds: 0, progress: 0 } };
@@ -404,6 +426,7 @@ async function handleStartLiveStreaming(
     cuesByLang: new Map(),
     pending: new Map(),
     adPeriods: [],
+    isAdPlaying: false,
     lastKnownVideoMs: captureStartVideoTime * 1000,
   };
   liveSessions.set(tabId, session);
@@ -439,6 +462,7 @@ async function handleStartLiveStreaming(
     const adState = await chrome.tabs.sendMessage(tabId, { type: "GET_AD_STATE" });
     if (typeof adState === "boolean" && adState) {
       initialMuted = true;
+      session.isAdPlaying = true;
       session.adPeriods.push({ startMs: 0, endMs: null });
       console.info(`[Kaptik BG Live] 캡처 시작 시 광고 감지 → 초기 무음 모드`);
     }
@@ -475,6 +499,7 @@ async function handleStartLiveStreaming(
     chrome.tabs.sendMessage(tabId, { type: "GET_AD_STATE" })
       .then((isAd: unknown) => {
         if (typeof isAd !== "boolean") return;
+        session.isAdPlaying = isAd;
         if (isAd !== lastAdState) {
           lastAdState = isAd;
           if (isAd) {
@@ -528,11 +553,20 @@ function handleSetLiveLang(tabId: number, language: string): void {
   if (session) {
     if (session.language === language) return; // 동일 언어면 무시
     session.language = language;
-    // pending(stage1 원문 대기)은 유지 — 이미 들어온 한국어 원문에 새 언어 번역이 매칭될 수 있음
+    // 언어 변경 전 요청의 stage2가 뒤늦게 도착하면 언어가 섞여 보일 수 있어 대기 중인 조각은 버린다.
+    session.pending.clear();
     // 해당 언어 칠판으로 전환. 이전에 쌓인 cue가 있으면 즉시 화면에 복원.
     const existingCues = session.cuesByLang.get(language) ?? [];
     const msg: BroadcastMessage = { type: "CUE_READY", videoId: session.videoId, cues: existingCues };
     chrome.tabs.sendMessage(tabId, msg).catch(() => {});
+    if (existingCues.length === 0) {
+      void readLiveCues(session.platform, session.videoId, language).then((storedCues) => {
+        if (storedCues.length === 0 || session.language !== language) return;
+        session.cuesByLang.set(language, storedCues);
+        const storedMsg: BroadcastMessage = { type: "CUE_READY", videoId: session.videoId, cues: storedCues };
+        chrome.tabs.sendMessage(tabId, storedMsg).catch(() => {});
+      });
+    }
     console.info(`[Kaptik BG Live] 라이브 언어 전환 → ${language} (tab ${tabId}, 기존 cue ${existingCues.length}개 복원)`);
   }
   // offscreen이 활성 WS로 set_lang을 보내도록 전달 (이후 자막부터 새 언어로 번역됨)
@@ -564,6 +598,7 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
       speaker: String(data.speaker ?? ""),
       cached: Boolean(data.cached),
       startMs: normalizeLiveCueStartMs(session, ts),
+      language: session.language,
     });
     console.debug(`[Kaptik BG Live] STT stage1 ts=${ts}ms: "${text_ko}"`);
     return;
@@ -577,9 +612,7 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
     const startMs = p.startMs > 0 ? p.startMs : normalizeLiveCueStartMs(session, ts);
 
     // 광고 구간 ts 필터: 감지 전/파이프라인 지연으로 서버에 전송된 광고 음성을 렌더링에서 제외
-    const isAdCue = session.adPeriods.some(
-      (period) => startMs >= period.startMs && (period.endMs === null || startMs <= period.endMs),
-    );
+    const isAdCue = session.isAdPlaying || isWithinAdPeriod(session, startMs);
     if (isAdCue) {
       console.info(`[Kaptik BG Live] 광고 구간 CUE 필터 (ts=${startMs}ms, rawTs=${ts}ms): "${p.text_ko}"`);
       return;
@@ -589,23 +622,26 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
     const start = startMs / 1000;
     // 번역 텍스트는 현재 세션 언어 키에 저장한다. en으로 하드코딩하면 일본어(ja)·인도네시아어(id) 등이
     // UI의 pickText(text, language)에서 매칭되지 않아 엉뚱한 폴백으로 표시된다.
+    const cueLanguage = p.language;
     const translated = String(data.text_en ?? "");
     const cue: SubtitleCue = {
       start,
       end: start + 6,
       speakerId: p.speaker || undefined,
-      text: { ko: p.text_ko, [session.language]: translated },
+      text: { ko: p.text_ko, [cueLanguage]: translated },
       annotations: (data.annotations as SubtitleCue["annotations"]) ?? [],
     };
 
     // 현재 언어 칠판에 추가. 없으면 새로 만든다.
-    const langCues = session.cuesByLang.get(session.language) ?? [];
+    const langCues = session.cuesByLang.get(cueLanguage) ?? [];
     langCues.push(cue);
     langCues.sort((a, b) => a.start - b.start);
-    session.cuesByLang.set(session.language, langCues);
+    session.cuesByLang.set(cueLanguage, langCues);
+    void writeLiveCues(session.platform, session.videoId, cueLanguage, langCues);
 
-    console.info(`[Kaptik BG Live] CUE #${langCues.length} → tab ${tabId}: [ko] "${p.text_ko}" / [${session.language}] "${translated}" (ts=${startMs}ms, rawTs=${ts}ms, cached=${p.cached})`);
+    console.info(`[Kaptik BG Live] CUE #${langCues.length} → tab ${tabId}: [ko] "${p.text_ko}" / [${cueLanguage}] "${translated}" (ts=${startMs}ms, rawTs=${ts}ms, cached=${p.cached})`);
 
+    if (cueLanguage !== session.language) return;
     const msg: BroadcastMessage = { type: "CUE_READY", videoId: session.videoId, cues: [...langCues] };
     chrome.tabs.sendMessage(tabId, msg).catch(() => {});
   }
@@ -797,7 +833,16 @@ chrome.runtime.onMessage.addListener(
           case "GET_LIVE_CUES": {
             const tabId = sender.tab?.id;
             const session = tabId != null ? liveSessions.get(tabId) : undefined;
-            if (!session) return { type: "LIVE_CUES", videoId: "", cues: [] };
+            if (!session) {
+              if (!req.platform || !req.videoId || !req.language) {
+                return { type: "LIVE_CUES", videoId: "", cues: [] };
+              }
+              return {
+                type: "LIVE_CUES",
+                videoId: req.videoId,
+                cues: await readLiveCues(req.platform, req.videoId, req.language),
+              };
+            }
             return {
               type: "LIVE_CUES",
               videoId: session.videoId,

@@ -682,6 +682,17 @@ async function handleStartLiveStreaming(
             const last = session.adPeriods[session.adPeriods.length - 1];
             if (last && last.endMs === null) {
               last.endMs = session.lastKnownVideoMs + 5000;
+              // 500ms 감지 지연 또는 파이프라인 타이밍으로 ad 구간 cue가 cuesByLang에
+              // 포함됐을 수 있으므로 소급 제거한다.
+              for (const [lang, cues] of session.cuesByLang) {
+                const cleanCues = cues.filter((c) => !isWithinAdPeriod(session, c.start * 1000));
+                session.cuesByLang.set(lang, cleanCues);
+                void writeLiveCues(session.platform, session.videoId, lang, cleanCues);
+              }
+              // 현재 언어의 clean cue 목록을 UI에 즉시 전송
+              const cleanCurrent = session.cuesByLang.get(session.language) ?? [];
+              const cleanMsg: BroadcastMessage = { type: "CUE_READY", videoId: session.videoId, cues: cleanCurrent };
+              chrome.tabs.sendMessage(tabId, cleanMsg).catch(() => {});
             }
             console.info(`[Kaptik BG Live] 광고 종료 → 캡처 재개 (tab ${tabId}, endMs=${session.adPeriods[session.adPeriods.length - 1]?.endMs})`);
           }

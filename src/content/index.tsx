@@ -148,7 +148,11 @@ class SubtitleController {
         // videoId 불일치 → 이전 영상 세션의 stale 메시지이므로 무시
         if (this.mounted && this.mounted.videoId === message.videoId) {
           if (this.mounted.isLive) {
-            this.mounted.handle.updateCues(message.cues);
+            // 광고 중엔 React 상태 업데이트를 막는다 — 백그라운드 필터를 통과한 ad cue가
+            // 광고 종료 후 Transcript에 남는 것을 방지하는 2차 방어선
+            if (!this.isAdPlaying()) {
+              this.mounted.handle.updateCues(message.cues);
+            }
           } else if (this.mounted.vodCuesReady) {
             // 첫 로딩 완료 후 seek/재생 시 즉시 반영
             this.mounted.handle.updateCues(message.cues);
@@ -270,6 +274,12 @@ class SubtitleController {
         ) {
           return;
         }
+        // 광고 중 DOM 변경(광고 video 삽입/레이아웃 변경)으로 인한 불필요한 teardown 방지.
+        // teardown() → STOP_LIVE_STREAMING 이 실행되면 광고 후 isLiveActive() = false가 되어
+        // 자동 재마운트가 불가능해진다.
+        if (this.adapter.alwaysCapture && this.isAdPlaying()) {
+          return;
+        }
       }
 
       // Weverse 같은 SPA는 새 영상으로 넘어가도 같은 <video> 태그를 재사용할 수 있다.
@@ -284,7 +294,10 @@ class SubtitleController {
       }
 
       // (재)마운트 준비
-      this.teardown();
+      // alwaysCapture 사이트에서 같은 videoId의 컨테이너 변경은 UI만 재마운트한다.
+      // STOP_LIVE_STREAMING을 보내면 광고 후에도 isLiveActive() = false로 재마운트 불가.
+      const keepCapture = this.adapter.alwaysCapture && this.mounted?.videoId === videoId;
+      this.teardown(!keepCapture);
       const video = await waitFor(() => this.adapter.getVideoElement());
       // 평가 도중 영상/설정이 바뀌었으면 중단
       if (
@@ -559,7 +572,7 @@ class SubtitleController {
     console.info("[Kaptik] 확장 컨텍스트 무효화 감지 → content script 정리 (탭 새로고침 필요)");
   }
 
-  private teardown() {
+  private teardown(stopCapture = true) {
     clearTimeout(this.speakerIdTimer);
     this.speakerIdTimer = undefined;
     this.speakerIdentifiedOnce = false;
@@ -567,7 +580,7 @@ class SubtitleController {
     this.videoCleanup?.();
     this.videoCleanup = null;
     this.startStreamingFn = null;
-    if (this.mounted) {
+    if (this.mounted && stopCapture) {
       // 컨텍스트 무효화 시 sendMessage가 동기적으로 throw하므로 try로 감싼다 (.catch는 동기 throw를 못 잡음)
       try {
         chrome.runtime.sendMessage({ type: "STOP_STREAMING" }).catch(() => {});

@@ -54,6 +54,18 @@ describe("upsertLiveCue", () => {
     expect(result).toHaveLength(2);
   });
 
+  it("긴 텍스트 완전 중복이 2초 이상 떨어져 있으면 별도 발화로 둔다 (Stage2 지연 도착 방지)", () => {
+    // 화자가 같은 문장을 반복하거나 ASR 파이프라인이 다른 ts로 동일 텍스트를 보낼 때,
+    // Stage2가 역순으로 도착해도 기존 자막 위치가 바뀌지 않아야 한다.
+    const result = upsertLiveCue(
+      [cue(15.383, "들키는 게 낫냐?", "Is it better to get caught?")],
+      cue(11.785, "들키는 게 낫냐?", "Is it better to get caught?"),
+      "en",
+    );
+
+    expect(result).toHaveLength(2);
+  });
+
   it("같은 발화의 점진적 업데이트(절반 이상 겹침)는 합친다", () => {
     // "안녕하"(3자) → "안녕하세요"(5자): 3/5 = 60% ≥ 50% → 병합
     const result = upsertLiveCue(

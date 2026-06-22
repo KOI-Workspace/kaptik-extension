@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { youtubeAdapter } from "./youtube";
-import { weverseAdapter } from "./weverse";
+import { weverseAdapter, isLikelyAdVideo } from "./weverse";
 import { instagramAdapter } from "./instagram";
 import { resolveAdapter } from "./index";
 
@@ -67,6 +67,34 @@ describe("Weverse isLive (URL 기준)", () => {
   });
   it("/media/ 경로는 라이브 아님", () => {
     expect(weverseAdapter.isLive!("https://weverse.io/bts/media/4-678")).toBe(false);
+  });
+});
+
+describe("Weverse isLikelyAdVideo — 광고 vs 다시보기 구분", () => {
+  it("실시간 라이브 본편(blob + Infinity)은 광고 아님", () => {
+    expect(isLikelyAdVideo({ isLivePage: true, src: "blob:abc", duration: Infinity })).toBe(false);
+  });
+
+  it("라이브 다시보기(blob + 긴 유한 길이 54분)는 광고 아님", () => {
+    // 이번 버그: /live/ URL이지만 54:54짜리 다시보기 → 광고로 오판되면 안 됨
+    expect(isLikelyAdVideo({ isLivePage: true, src: "blob:abc", duration: 3294 })).toBe(false);
+  });
+
+  it("라이브 중 짧은 삽입 광고(blob + 30초)는 광고", () => {
+    expect(isLikelyAdVideo({ isLivePage: true, src: "blob:abc", duration: 30 })).toBe(true);
+  });
+
+  it("경계값: 180초까지는 광고, 181초부터는 본편", () => {
+    expect(isLikelyAdVideo({ isLivePage: true, src: "blob:abc", duration: 180 })).toBe(true);
+    expect(isLikelyAdVideo({ isLivePage: true, src: "blob:abc", duration: 181 })).toBe(false);
+  });
+
+  it("광고 CDN(doubleclick) src는 길이와 무관하게 광고", () => {
+    expect(isLikelyAdVideo({ isLivePage: true, src: "https://doubleclick.net/ad", duration: Infinity })).toBe(true);
+  });
+
+  it("라이브 페이지가 아니면 짧은 blob도 광고 아님", () => {
+    expect(isLikelyAdVideo({ isLivePage: false, src: "blob:abc", duration: 30 })).toBe(false);
   });
 });
 

@@ -337,7 +337,6 @@ export function Popup() {
           patch={patch}
           t={t}
           onUpgrade={openPricing}
-          isLive={target.isLive}
           onLanguageChange={handleLanguageChange}
         />
       )}
@@ -603,14 +602,12 @@ export function AvailableView({
   patch,
   t,
   onUpgrade,
-  isLive,
   onLanguageChange,
 }: {
   settings: KaptikSettings;
   patch: (next: Partial<KaptikSettings>) => void;
   t: Messages;
   onUpgrade: () => void;
-  isLive: boolean;
   onLanguageChange?: (lang: LanguageCode) => void;
 }) {
   // 자막이 꺼져 있으면 '자막 보기'로 켜도록 유도

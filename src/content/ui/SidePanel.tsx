@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { LanguageCode, SubtitleTrack } from "@/types/subtitle";
+import type { SubtitleTrack } from "@/types/subtitle";
 import type { KaptikSettings } from "@/shared/settings";
 import { PRICING_URL, isPaid, getEffectivePlan } from "@/shared/settings";
 import { getMessages } from "@/shared/i18n";
 import { resolveMember } from "@/shared/members";
 import { Avatar } from "./Avatar";
 import { AnnotatedText } from "./AnnotatedText";
+import { pickText } from "./pickText";
 
 interface SidePanelProps {
   video: HTMLVideoElement;
@@ -22,13 +23,6 @@ interface SidePanelProps {
 interface OpenAnnotation {
   cueIndex: number;
   annIndex: number;
-}
-
-function pickText(
-  text: Partial<Record<LanguageCode, string>>,
-  language: LanguageCode,
-): string | null {
-  return text[language] ?? text.en ?? Object.values(text)[0] ?? null;
 }
 
 /** 초 → m:ss 형식 */

@@ -1,21 +1,14 @@
 import { type CSSProperties } from "react";
-import type { LanguageCode, SubtitleTrack } from "@/types/subtitle";
+import type { SubtitleTrack } from "@/types/subtitle";
 import type { KaptikSettings } from "@/shared/settings";
 import { resolveMember } from "@/shared/members";
 import { Avatar } from "./Avatar";
+import { pickText } from "./pickText";
 
 interface CenterSubtitleProps {
   track: SubtitleTrack;
   activeIndex: number;
   settings: KaptikSettings;
-}
-
-/** 선택 언어 → 영어 → 첫 언어 순으로 텍스트를 고른다. 빈 문자열("")은 값 없음으로 취급해 다음 언어로 폴백한다. */
-function pickText(
-  text: Partial<Record<LanguageCode, string>>,
-  language: LanguageCode,
-): string | null {
-  return text[language] || text.en || Object.values(text)[0] || null;
 }
 
 /**

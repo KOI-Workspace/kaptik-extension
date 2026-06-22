@@ -58,7 +58,8 @@
       "Bash(git merge worktree-fix-ad-subtitle --no-ff -m ' *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://api.kaptik.site/health)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://api.kaptik.site/)",
-      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\" \"https://api.kaptik.site/live/subtitles?platform=weverse&video_id=3-228133910\")"
+      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\" \"https://api.kaptik.site/live/subtitles?platform=weverse&video_id=3-228133910\")",
+      "Bash(curl *)"
     ]
   }
 }

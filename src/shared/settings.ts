@@ -89,7 +89,14 @@ export const PRICING_URL = "https://kaptik.app/pricing";
  */
 export async function getSettings(): Promise<KaptikSettings> {
   const result = await chrome.storage.local.get(SETTINGS_KEY);
-  return { ...DEFAULT_SETTINGS, ...(result[SETTINGS_KEY] ?? {}) };
+  const stored = result[SETTINGS_KEY] ?? {};
+  // serverUrl·authToken은 빌드 시 env로 고정 — 저장된 구버전 값이 남아도 무시
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    serverUrl: DEFAULT_SETTINGS.serverUrl,
+    authToken: DEFAULT_SETTINGS.authToken,
+  };
 }
 
 /**

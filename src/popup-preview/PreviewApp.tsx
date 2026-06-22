@@ -188,9 +188,7 @@ const SCENARIOS: Scenario[] = [
           settings={{ ...settings, devMode: true }}
           patch={patch}
           t={t}
-          onUpgrade={() => {}}
-          isLive={false}
-        />
+          onUpgrade={() => {}}        />
       </>
     ),
   },
@@ -205,9 +203,7 @@ const SCENARIOS: Scenario[] = [
           settings={{ ...settings, devMode: true }}
           patch={patch}
           t={t}
-          onUpgrade={() => {}}
-          isLive={true}
-        />
+          onUpgrade={() => {}}        />
       </>
     ),
   },
@@ -222,9 +218,7 @@ const SCENARIOS: Scenario[] = [
           settings={{ ...settings, enabled: false }}
           patch={patch}
           t={t}
-          onUpgrade={() => {}}
-          isLive={true}
-        />
+          onUpgrade={() => {}}        />
       </>
     ),
   },
@@ -239,9 +233,7 @@ const SCENARIOS: Scenario[] = [
           settings={{ ...settings, devMode: false, plan: "free" }}
           patch={patch}
           t={t}
-          onUpgrade={() => {}}
-          isLive={true}
-        />
+          onUpgrade={() => {}}        />
       </>
     ),
   },

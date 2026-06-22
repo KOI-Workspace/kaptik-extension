@@ -10,6 +10,7 @@ import {
   type KaptikSettings,
 } from "@/shared/settings";
 import { mountDisplay, type DisplayHandle } from "./ui/mount";
+import { detectLiveFromVideo } from "./liveDetection";
 import { waitFor, watchUrlChanges } from "./utils";
 import type { SubtitleCue, SubtitleTrack } from "@/types/subtitle";
 
@@ -20,19 +21,6 @@ import type { SubtitleCue, SubtitleTrack } from "@/types/subtitle";
  */
 /** 팝업의 GET_VIDEO_TIME 요청에 응답하기 위한 모듈 스코프 컨트롤러 참조 */
 let activeController: SubtitleController | null = null;
-
-/**
- * 실제 라이브 여부를 video.duration으로 판정한다.
- * Weverse는 종료된 라이브(다시보기)도 URL이 `/live/`로 유지되어 URL만으론 구분이 안 된다.
- * duration이 Infinity면 실시간 라이브, 유한하면 녹화(replay)다.
- * 메타데이터 로딩 전(NaN)이면 URL 힌트로 폴백한다.
- */
-function detectLiveFromVideo(video: HTMLVideoElement, urlHint: boolean): boolean {
-  const d = video.duration;
-  if (Number.isFinite(d) && d > 0) return false; // 유한 길이 = 녹화(replay)
-  if (d === Infinity) return true; // 무한 = 실시간 라이브
-  return urlHint; // 판단 불가 → URL 힌트
-}
 
 async function bootstrap() {
   // 주입 여부 확인용 — 어댑터 매칭 전에 무조건 찍는다

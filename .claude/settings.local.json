@@ -62,7 +62,8 @@
       "Bash(curl *)",
       "Bash(git -C /Users/leehyunsoo/Dream/Kaptik/kaptik-extension branch -a)",
       "Bash(git -C /Users/leehyunsoo/Dream/Kaptik/kaptik-extension worktree list)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(npm test *)"
     ]
   }
 }

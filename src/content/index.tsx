@@ -271,15 +271,16 @@ class SubtitleController {
           return;
         }
       }
-      // alwaysCapture 사이트: SPA URL 변경으로 videoId가 달라져도
-      // 같은 video 요소가 재생 중이면 기존 세션 유지 (teardown 방지)
-      if (
-        this.adapter.alwaysCapture &&
-        this.mounted &&
-        currentVideo != null &&
-        currentVideo === this.mounted.video
-      ) {
-        return;
+
+      // Weverse 같은 SPA는 새 영상으로 넘어가도 같은 <video> 태그를 재사용할 수 있다.
+      // videoId가 바뀌었으면 같은 video 요소라도 이전 캡처 세션을 반드시 끊어
+      // 이전 영상 자막/광고 소리가 새 영상 처리로 섞이지 않게 한다.
+      if (this.adapter.alwaysCapture && this.mounted && this.mounted.videoId !== videoId) {
+        try {
+          await chrome.runtime.sendMessage({ type: "STOP_LIVE_STREAMING" });
+        } catch {
+          /* 확장 리로드/탭 전환 중이면 무시 */
+        }
       }
 
       // (재)마운트 준비

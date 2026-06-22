@@ -2,6 +2,40 @@ import type { SiteAdapter } from "./types";
 import { findVideoBox, findDockColumn } from "./heuristics";
 
 /**
+ * 위버스 삽입 광고로 볼 수 있는 영상의 최대 길이(초).
+ * 이보다 길면 광고가 아니라 본편(라이브 다시보기 등)으로 판단한다.
+ * (광고는 보통 15~60초, 본편 다시보기는 수십 분)
+ */
+const AD_MAX_DURATION_SEC = 180;
+
+/**
+ * 영상 속성만으로 광고 영상 여부를 판정하는 순수 로직 (DOM 미접근 → 단위 테스트 가능).
+ * - 광고 CDN(doubleclick 등) src면 광고
+ * - 라이브 페이지의 blob + "짧은" 유한 길이 = 삽입 광고
+ *   (진짜 라이브 본편=Infinity, 다시보기 본편=긴 유한값 → 광고 아님)
+ * - 그 외 비-blob src는 광고로 간주
+ */
+export function isLikelyAdVideo(params: {
+  isLivePage: boolean;
+  src: string;
+  duration: number;
+}): boolean {
+  const { isLivePage, src, duration } = params;
+  if (/doubleclick|googlesyndication|gvt1|googlevideo|adservice/i.test(src)) return true;
+  if (
+    isLivePage &&
+    src.startsWith("blob:") &&
+    Number.isFinite(duration) &&
+    duration > 0 &&
+    duration <= AD_MAX_DURATION_SEC
+  ) {
+    return true;
+  }
+  if (!src || src.startsWith("blob:")) return false;
+  return true;
+}
+
+/**
  * Weverse 어댑터.
  * Weverse는 SPA이며 라이브/미디어/모먼트 등 경로 구조가 다양하고,
  * DOM 클래스명이 빌드마다 해시로 바뀐다. 그래서 고정 셀렉터 대신
@@ -60,9 +94,10 @@ export const weverseAdapter: SiteAdapter = {
    * 광고 재생 여부.
    * - 알려진 광고 CDN URL(구글 등)은 바로 감지
    * - 위버스 라이브 본편은 blob: URL + duration=Infinity(라이브 스트림)
-   * - 위버스 광고(LG U+ 등 한국 브랜드)는 blob: URL이지만 duration이 유한값(광고 길이)
-   *   → 라이브 페이지에서 blob + 유한 duration = 광고로 판정
-   * - VOD/replay 페이지(유한 duration이 정상)는 라이브 페이지가 아니므로 오판하지 않음
+   * - 위버스 광고(LG U+ 등 한국 브랜드)는 blob: URL이지만 duration이 짧은 유한값(광고 길이)
+   *   → 라이브 페이지에서 blob + "짧은" 유한 duration = 광고로 판정
+   * - 라이브 다시보기(/live/ 유지하되 54분 등 긴 유한 duration)는 본편이므로 광고로 보지 않는다
+   * 판별 핵심은 순수 함수 isLikelyAdVideo로 분리(테스트 대상). 여기선 재생/가시성만 거른다.
    */
   isAdPlaying() {
     const pageText = document.body?.innerText?.slice(0, 3000) ?? "";
@@ -73,7 +108,6 @@ export const weverseAdapter: SiteAdapter = {
     const isLivePage = /\/live\//.test(location.href);
     const videos = Array.from(document.querySelectorAll("video"));
     return videos.some((v) => {
-      const src = v.currentSrc || "";
       const isPlaying = !v.paused && !v.ended && !v.muted && v.readyState >= 2;
       if (!isPlaying) return false;
 
@@ -81,12 +115,7 @@ export const weverseAdapter: SiteAdapter = {
       const isVisible = rect.width > 80 && rect.height > 45;
       if (!isVisible) return false;
 
-      if (/doubleclick|googlesyndication|gvt1|googlevideo|adservice/i.test(src)) return true;
-      // 라이브 페이지에서 blob URL 영상의 duration이 유한하면 광고
-      // (라이브 본편은 duration=Infinity, 광고는 광고 길이만큼의 유한값을 가짐)
-      if (isLivePage && src.startsWith("blob:") && Number.isFinite(v.duration)) return true;
-      if (!src || src.startsWith("blob:")) return false;
-      return true;
+      return isLikelyAdVideo({ isLivePage, src: v.currentSrc || "", duration: v.duration });
     });
   },
 };

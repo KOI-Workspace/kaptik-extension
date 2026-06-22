@@ -40,13 +40,26 @@ function shouldMergeCue(existing: SubtitleCue, next: SubtitleCue, language: stri
   );
   if (!koRelated && !translatedRelated) return false;
 
+  const normalizedExistingKo = normalizeText(existing.text.ko ?? "");
+  const normalizedNextKo = normalizeText(next.text.ko ?? "");
+  const normalizedExistingTr = normalizeText(existing.text[language as LanguageCode] ?? "");
+  const normalizedNextTr = normalizeText(next.text[language as LanguageCode] ?? "");
+
+  // 텍스트가 완전히 동일한 경우는 짧은 병합 창(1.5초)만 허용한다.
+  // ASR 수정은 보통 텍스트가 늘어나는 방향이므로, 같은 텍스트가 2초 이상 떨어진 위치에서
+  // 오면 화자가 반복하거나 Stage2가 지연 도착한 다른 발화로 판단해 별도 줄로 유지한다.
+  const isExactDuplicate =
+    normalizedExistingKo.length > 0 &&
+    normalizedExistingKo === normalizedNextKo &&
+    normalizedExistingTr === normalizedNextTr;
+
   const longestTextLength = Math.max(
-    normalizeText(existing.text.ko).length,
-    normalizeText(next.text.ko).length,
-    normalizeText(existing.text[language as LanguageCode]).length,
-    normalizeText(next.text[language as LanguageCode]).length,
+    normalizedExistingKo.length,
+    normalizedNextKo.length,
+    normalizedExistingTr.length,
+    normalizedNextTr.length,
   );
-  const windowSec = longestTextLength <= SHORT_TEXT_MAX_LENGTH
+  const windowSec = isExactDuplicate || longestTextLength <= SHORT_TEXT_MAX_LENGTH
     ? SHORT_TEXT_MERGE_WINDOW_SEC
     : LONG_TEXT_MERGE_WINDOW_SEC;
   return timeDiff <= windowSec;

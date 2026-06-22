@@ -209,16 +209,6 @@ export function Popup() {
     setStatus({ state: "none" });
   };
 
-  /** 현재 영상의 로컬 저장 cue를 삭제한다 (광고 구간 오캡처 데이터 제거). */
-  const handleClearCues = () => {
-    if (!target) return;
-    void chrome.runtime.sendMessage({
-      type: "CLEAR_LIVE_CUES",
-      platform: target.platform,
-      videoId: target.videoId,
-    });
-  };
-
   const handleLanguageChange = (newLang: LanguageCode) => {
     if (!target) return;
     patch({ language: newLang });
@@ -334,12 +324,7 @@ export function Popup() {
       )}
 
       {target && !locked && status?.state === "generating" && (
-        <GeneratingView
-          t={t}
-          status={status}
-          liveCapturing={target.alwaysCapture}
-          onClearCues={target.alwaysCapture ? handleClearCues : undefined}
-        />
+        <GeneratingView t={t} status={status} liveCapturing={target.alwaysCapture} />
       )}
 
       {target && !locked && status?.state === "failed" && (
@@ -463,13 +448,10 @@ export function GeneratingView({
   t,
   status,
   liveCapturing = false,
-  onClearCues,
 }: {
   t: Messages;
   status: { state: "generating"; etaSeconds: number; progress: number; step?: string };
   liveCapturing?: boolean;
-  /** 라이브 캡처 중 "자막 초기화" 버튼 클릭 핸들러. 이전 세션 광고 구간 cue를 제거할 때 사용. */
-  onClearCues?: () => void;
 }) {
   const stepLabel = status.step ? (STEP_LABELS[status.step] ?? null) : null;
 
@@ -523,17 +505,6 @@ export function GeneratingView({
       <div className="state-note">
         {liveCapturing ? t.liveCapturingNote : t.generatingNote}
       </div>
-      {liveCapturing && onClearCues && (
-        <button
-          type="button"
-          className="btn-ghost btn-small"
-          onClick={() => {
-            if (window.confirm(t.clearCuesConfirm)) onClearCues();
-          }}
-        >
-          {t.clearCuesBtn}
-        </button>
-      )}
     </div>
   );
 }

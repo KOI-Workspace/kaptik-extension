@@ -22,7 +22,6 @@ import {
   areCuesReady,
   readLiveCues,
   writeLiveCues,
-  deleteLiveCues,
 } from "./generationStore";
 import { StreamingSession } from "@/api/wsClient";
 import { MockStreamingSession } from "@/api/mockStreamingSession";
@@ -1063,11 +1062,6 @@ chrome.runtime.onMessage.addListener(
           }
           case "SET_LIVE_LANG": {
             handleSetLiveLang(req.tabId, req.language);
-            return { type: "ERR", error: "" };
-          }
-          case "CLEAR_LIVE_CUES": {
-            await deleteLiveCues(req.platform, req.videoId);
-            console.info(`[Kaptik BG] 로컬 cue 삭제 완료: ${req.platform}/${req.videoId}`);
             return { type: "ERR", error: "" };
           }
           default:

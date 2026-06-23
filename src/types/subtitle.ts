@@ -8,7 +8,8 @@ export type Platform = "youtube" | "weverse" | "instagram";
 export type LanguageCode =
   | "ko" | "en" | "ja" | "zh-CN" | "id"
   | "th" | "zh-TW" | "es" | "vi" | "pt" | "it" | "de" | "ru" | "fr"
-  | "hi" | "ar" | "tr" | "tl" | "ms" | "pl" | "cs" | "uk" | "ro";
+  | "hi" | "ar" | "tr" | "tl" | "ms" | "pl" | "cs" | "uk" | "ro"
+  | "sv" | "no" | "da" | "fi" | "nl";
 
 /** 사용자에게 보여줄 언어 라벨 */
 export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
@@ -35,6 +36,11 @@ export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   cs: "Čeština",
   uk: "Українська",
   ro: "Română",
+  sv: "Svenska",
+  no: "Norsk",
+  da: "Dansk",
+  fi: "Suomi",
+  nl: "Nederlands",
 };
 
 /** 자막 번역 대상 언어 목록 (ko 제외) — 드롭다운·availableLanguages의 단일 진실 소스 */
@@ -42,6 +48,7 @@ export const SUBTITLE_LANGUAGE_CODES: LanguageCode[] = [
   "en", "ja", "zh-CN", "zh-TW", "id",
   "es", "pt", "fr", "de", "it", "ru", "pl", "cs", "uk", "ro",
   "th", "vi", "tr", "ar", "hi", "ms", "tl",
+  "sv", "no", "da", "fi", "nl",
 ];
 
 /** 화자(멤버) 정보 */

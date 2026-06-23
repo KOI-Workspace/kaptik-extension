@@ -3,9 +3,12 @@ export type Platform = "youtube" | "weverse" | "instagram";
 
 /**
  * 지원 자막 언어 코드 (BCP-47 일부)
- * - ko: 한국어 원문, en: 영어, ja: 일본어, zh-CN: 중국어 간체, id: 인도네시아어
+ * - ko: 한국어 원문 (생성 소스), 나머지는 번역 대상 언어
  */
-export type LanguageCode = "ko" | "en" | "ja" | "zh-CN" | "id";
+export type LanguageCode =
+  | "ko" | "en" | "ja" | "zh-CN" | "id"
+  | "th" | "zh-TW" | "es" | "vi" | "pt" | "it" | "de" | "ru" | "fr"
+  | "hi" | "ar" | "tr" | "tl" | "ms" | "pl" | "cs" | "uk" | "ro";
 
 /** 사용자에게 보여줄 언어 라벨 */
 export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
@@ -14,7 +17,32 @@ export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   ja: "日本語",
   "zh-CN": "简体中文",
   id: "Bahasa Indonesia",
+  th: "ภาษาไทย",
+  "zh-TW": "繁體中文",
+  es: "Español",
+  vi: "Tiếng Việt",
+  pt: "Português",
+  it: "Italiano",
+  de: "Deutsch",
+  ru: "Русский",
+  fr: "Français",
+  hi: "हिन्दी",
+  ar: "العربية",
+  tr: "Türkçe",
+  tl: "Filipino",
+  ms: "Bahasa Melayu",
+  pl: "Polski",
+  cs: "Čeština",
+  uk: "Українська",
+  ro: "Română",
 };
+
+/** 자막 번역 대상 언어 목록 (ko 제외) — 드롭다운·availableLanguages의 단일 진실 소스 */
+export const SUBTITLE_LANGUAGE_CODES: LanguageCode[] = [
+  "en", "ja", "zh-CN", "zh-TW", "id",
+  "es", "pt", "fr", "de", "it", "ru", "pl", "cs", "uk", "ro",
+  "th", "vi", "tr", "ar", "hi", "ms", "tl",
+];
 
 /** 화자(멤버) 정보 */
 export interface Member {

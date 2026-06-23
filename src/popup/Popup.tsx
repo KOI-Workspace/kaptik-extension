@@ -8,7 +8,7 @@ import {
   PRICING_URL,
   type KaptikSettings,
 } from "@/shared/settings";
-import { getMessages, UI_LANGUAGE_OPTIONS, type Messages } from "@/shared/i18n";
+import { getMessages, type Messages } from "@/shared/i18n";
 import { resolveAdapter } from "@/content/siteAdapters";
 import {
   requestStatus,
@@ -17,6 +17,7 @@ import {
 } from "@/shared/messaging";
 import {
   LANGUAGE_LABELS,
+  SUBTITLE_LANGUAGE_CODES,
   type LanguageCode,
   type Platform,
   type SubtitleStatus,
@@ -369,7 +370,7 @@ export function LanguageSelect({
       aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value as LanguageCode)}
     >
-      {UI_LANGUAGE_OPTIONS.map((code) => (
+      {SUBTITLE_LANGUAGE_CODES.map((code) => (
         <option key={code} value={code}>
           {LANGUAGE_LABELS[code]}
         </option>

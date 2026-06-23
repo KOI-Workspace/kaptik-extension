@@ -1,4 +1,4 @@
-import type { Platform, SubtitleCue, SubtitleTrack } from "@/types/subtitle";
+import { SUBTITLE_LANGUAGE_CODES, type Platform, type SubtitleCue, type SubtitleTrack } from "@/types/subtitle";
 import { DEFAULT_MEMBERS } from "@/shared/members";
 
 /**
@@ -142,7 +142,7 @@ export function getMockTrack(platform: Platform, videoId: string): SubtitleTrack
     platform,
     videoId,
     cues: MOCK_CUES,
-    availableLanguages: ["ko", "en", "ja", "zh-CN", "id"],
+    availableLanguages: SUBTITLE_LANGUAGE_CODES,
     members: DEFAULT_MEMBERS,
     isLive: false,
   };

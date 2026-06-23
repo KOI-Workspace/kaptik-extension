@@ -12,7 +12,7 @@ import {
 import { mountDisplay, type DisplayHandle } from "./ui/mount";
 import { detectLiveFromVideo } from "./liveDetection";
 import { waitFor, watchUrlChanges } from "./utils";
-import type { SubtitleCue, SubtitleTrack } from "@/types/subtitle";
+import { SUBTITLE_LANGUAGE_CODES, type SubtitleCue, type SubtitleTrack } from "@/types/subtitle";
 
 /**
  * content script 진입점.
@@ -362,7 +362,7 @@ class SubtitleController {
             platform: this.adapter.platform,
             videoId,
             cues: [],
-            availableLanguages: ["ko", "en", "ja", "zh-CN", "id"],
+            availableLanguages: SUBTITLE_LANGUAGE_CODES,
             members: {},
             error: vodStatus.reason,
           };
@@ -390,6 +390,10 @@ class SubtitleController {
           this.teardown();
           return;
         }
+        // 광고 중이면 마운트 스킵 — 1500ms 타이머가 광고 종료 후 재마운트함
+        if (this.isAdPlaying()) {
+          return;
+        }
       }
 
       // 빈 트랙으로 먼저 마운트한 뒤 스트리밍으로 cue를 채운다
@@ -397,7 +401,7 @@ class SubtitleController {
         platform: this.adapter.platform,
         videoId,
         cues: [],
-        availableLanguages: ["ko", "en", "ja", "zh-CN", "id"],
+        availableLanguages: SUBTITLE_LANGUAGE_CODES,
         members: {},
         speakerIdentified,
       };

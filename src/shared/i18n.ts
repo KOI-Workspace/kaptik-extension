@@ -1,10 +1,10 @@
 import type { LanguageCode } from "@/types/subtitle";
 
 /**
- * UI 표시 언어.
- * 한국어(ko)는 K-pop 원문 언어이므로 시청자 UI 언어 선택지에서는 제외한다.
+ * 팝업 UI 번역 언어 (MESSAGES가 제공된 4개만).
+ * 자막 번역 대상 언어 전체 목록은 subtitle.ts의 SUBTITLE_LANGUAGE_CODES 사용.
  */
-export type UiLanguage = Exclude<LanguageCode, "ko">;
+export type UiLanguage = "en" | "ja" | "zh-CN" | "id";
 
 /** 사용자가 선택할 수 있는 UI/자막 언어 (한국어 제외, 영어가 기본) */
 export const UI_LANGUAGE_OPTIONS: UiLanguage[] = ["en", "ja", "zh-CN", "id"];

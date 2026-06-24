@@ -16,6 +16,13 @@ export function wsUrlToHttp(url: string): string {
   return url.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
 }
 
+/** GET /users/me 응답 타입 */
+export interface UserProfile {
+  email: string;
+  plan: string;
+  subtitle_lang: string;
+}
+
 /** 백엔드 Job API 응답 타입 */
 export interface JobResponse {
   job_id: string;
@@ -152,6 +159,26 @@ export async function createJob(opts: {
     { method: "POST", body, authToken: opts.authToken },
   );
   return { jobId: res.job_id };
+}
+
+/** GET /users/me — 서버에 저장된 유저 프로필을 조회한다. */
+export async function fetchUserProfile(serverUrl: string, authToken: string): Promise<UserProfile> {
+  const base = wsUrlToHttp(serverUrl);
+  return fetchJson<UserProfile>(`${base}/users/me`, { authToken });
+}
+
+/** PATCH /users/me — 서버의 subtitle_lang을 업데이트한다. */
+export async function patchUserProfile(
+  serverUrl: string,
+  authToken: string,
+  subtitleLang: string,
+): Promise<void> {
+  const base = wsUrlToHttp(serverUrl);
+  await fetchJson<UserProfile>(`${base}/users/me`, {
+    method: "PATCH",
+    body: { subtitle_lang: subtitleLang },
+    authToken,
+  });
 }
 
 /**

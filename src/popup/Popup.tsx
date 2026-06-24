@@ -15,6 +15,7 @@ import {
   startGeneration,
   setLiveLang,
 } from "@/shared/messaging";
+import { fetchUserProfile, patchUserProfile } from "@/api/client";
 import {
   LANGUAGE_LABELS,
   SUBTITLE_LANGUAGE_CODES,
@@ -213,6 +214,7 @@ export function Popup() {
   const handleLanguageChange = (newLang: LanguageCode) => {
     if (!target) return;
     patch({ language: newLang });
+    void patchUserProfile(settings.serverUrl, settings.authToken, newLang).catch(() => {});
 
     // alwaysCapture(위버스 등) 라이브 캡처: 언어 변경 = 캡처를 유지한 채 서버 번역 언어만 전환.
     // 이전 언어 자막은 비우고 새 언어로 다시 쌓인다 (광고 차단 등 나머지 로직은 그대로).
@@ -236,6 +238,16 @@ export function Popup() {
     });
   };
 
+  const handleLogin = async () => {
+    await patch({ loggedIn: true });
+    try {
+      const profile = await fetchUserProfile(settings.serverUrl, settings.authToken);
+      await patch({ language: profile.subtitle_lang as LanguageCode });
+    } catch {
+      // 네트워크 오류 시 로컬 기본값 유지
+    }
+  };
+
   const handleLogout = () => {
     setAccountMenuOpen(false);
     patch({ loggedIn: false });
@@ -245,7 +257,7 @@ export function Popup() {
   if (!settings.loggedIn) {
     return (
       <div className="popup">
-        <LoginView t={t} onLogin={() => patch({ loggedIn: true })} />
+        <LoginView t={t} onLogin={handleLogin} />
       </div>
     );
   }

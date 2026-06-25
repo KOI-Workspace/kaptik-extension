@@ -25,7 +25,7 @@ import {
 } from "./generationStore";
 import { StreamingSession } from "@/api/wsClient";
 import { MockStreamingSession } from "@/api/mockStreamingSession";
-import { isDuplicateLiveStage1 } from "./liveCueDedup";
+import { isCachedTsDuplicate, isDuplicateLiveStage1 } from "./liveCueDedup";
 import { compactLiveCues, upsertLiveCue } from "./liveCueMerge";
 
 /** 자막 트랙 메모리 캐시 (서비스 워커 생존 동안 유효) */
@@ -794,6 +794,16 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
     // 두 경우 모두 Stage1을 스킵하면 Stage2도 pending miss로 자동 무시된다.
     const normalizedMs = normalizeLiveCueStartMs(session, ts);
     const existingLangCues = session.cuesByLang.get(session.language) ?? [];
+
+    // cached=true(send_cached_subtitles 재전송): ts 일치 여부만으로 빠르게 판별한다.
+    // 텍스트 비교 없이 ts가 기존 cue와 1초 이내 일치하면 중복으로 처리한다.
+    if (data.cached === true) {
+      if (isCachedTsDuplicate({ existingCues: existingLangCues, startMs: normalizedMs })) {
+        console.info(`[Kaptik BG Live] cached Stage1 ts 중복 스킵 (ts=${normalizedMs}ms)`);
+        return;
+      }
+    }
+
     const isDuplicate = isDuplicateLiveStage1({
       existingCues: existingLangCues,
       pendingCues: [...session.pending.values()],
@@ -850,6 +860,21 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
 
     // 현재 언어 칠판에 upsert. 같은 발화의 부분/반복 업데이트는 한 줄로 병합한다.
     const langCues = session.cuesByLang.get(cueLanguage) ?? [];
+
+    // cached=true(send_cached_subtitles 재전송): 이미 같은 한국어 원문이 있으면 스킵.
+    // ts 기반 체크(Stage1)에서 통과한 경우에도 Stage2 단계에서 한 번 더 방어한다.
+    // 진짜 반복 발화는 merge하지 않고 보존하기 위해 cached 경로에만 적용한다.
+    if (p.cached) {
+      const normalizedKo = p.text_ko.replace(/\s+/g, " ").trim().toLowerCase();
+      const alreadyExists = langCues.some(
+        (c) => (c.text.ko ?? "").replace(/\s+/g, " ").trim().toLowerCase() === normalizedKo,
+      );
+      if (alreadyExists) {
+        console.info(`[Kaptik BG Live] cached CUE 텍스트 중복 스킵 (ts=${startMs}ms): "${p.text_ko}"`);
+        return;
+      }
+    }
+
     const nextLangCues = upsertLiveCue(langCues, cue, cueLanguage);
     session.cuesByLang.set(cueLanguage, nextLangCues);
     void writeLiveCues(session.platform, session.videoId, cueLanguage, nextLangCues);

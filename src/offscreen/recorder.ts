@@ -5,6 +5,8 @@
  * over a WebSocket. Forwards STT/translation messages back to the SW.
  */
 
+import { shouldMuteReplay } from "./replayMute";
+
 interface CaptureTabMsg {
   type: "CAPTURE_TAB";
   streamId: string;
@@ -42,6 +44,11 @@ let sentAudioMs = 0;
 let latestVideoMs = 0;
 // 마지막으로 time_sync 마커를 보낸 시점의 sentAudioMs (전송 주기 제어용)
 let lastSyncAudioMs = 0;
+// 지금까지 도달한 최대 영상 위치(ms) = 라이브 최전방. 되감기 판정 기준.
+let maxVideoMs = 0;
+// 되감기(DVR rewind)로 이미 자막이 만들어진 구간을 다시 듣는 중이면 true →
+// 그 오디오를 무음으로 전송해 재전사(중복 자막)를 막는다.
+let replayMuted = false;
 
 async function startCapture(msg: CaptureTabMsg): Promise<void> {
   stopCapture();
@@ -78,6 +85,8 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
   sentAudioMs = 0;
   lastSyncAudioMs = 0;
   latestVideoMs = (msg.captureStartSec ?? 0) * 1000;
+  maxVideoMs = latestVideoMs;
+  replayMuted = false;
 
   // 탭 캡처 시 원본 탭이 음소거됨 → Audio 요소로 원음질 그대로 복원
   playbackEl = new Audio();
@@ -130,9 +139,10 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
         adMuted = false;
   adMutedSince = 0;
       }
-      // 광고 중이 아닐 때만 실제 오디오를 채운다. 광고 중이면 i16은 0(무음)인 채로 전송 →
-      // 광고 음성이 STT로 가지 않는다. 오디오 시계(sentAudioMs)는 계속 진행해 타임싱크 유지.
-      if (!adMuted) {
+      // 광고 중이거나 되감기로 이미 본 구간을 다시 듣는 중이 아닐 때만 실제 오디오를 채운다.
+      // 둘 중 하나라도 해당하면 i16은 0(무음)인 채로 전송 → 그 음성이 STT로 가지 않아
+      // 중복 자막/광고 자막이 생기지 않는다. 오디오 시계(sentAudioMs)는 계속 진행해 타임싱크 유지.
+      if (!adMuted && !replayMuted) {
         for (let i = 0; i < f32.length; i++) {
           i16[i] = Math.max(-32768, Math.min(32767, Math.round(f32[i] * 32767)));
         }
@@ -204,6 +214,8 @@ function stopCapture(): void {
   sentAudioMs = 0;
   lastSyncAudioMs = 0;
   latestVideoMs = 0;
+  maxVideoMs = 0;
+  replayMuted = false;
   adMuted = false;
   adMutedSince = 0;
 }
@@ -217,7 +229,31 @@ chrome.runtime.onMessage.addListener(
     } else if (msg.type === "UPDATE_VIDEO_TIME") {
       // background가 0.5초마다 보내는 현재 영상 위치 — 점프 시 즉시 반영
       if (typeof msg.videoMs === "number" && Number.isFinite(msg.videoMs)) {
+        const prevVideoMs = latestVideoMs;
         latestVideoMs = msg.videoMs;
+
+        // 되감기 판정: 라이브 최전방(maxVideoMs)보다 충분히 뒤면 무음 처리.
+        replayMuted = shouldMuteReplay(latestVideoMs, maxVideoMs);
+        // 되감기가 아니면 최전방 갱신 (앞으로 나아간 만큼만 올라간다)
+        if (!replayMuted) {
+          maxVideoMs = Math.max(maxVideoMs, latestVideoMs);
+        }
+
+        // 큰 점프(seek) 감지 시 즉시 time_sync 1회 전송 → resolve_ts 마커가 다음 주기(최대 500ms)를
+        // 기다리지 않고 바로 정정돼 점프 직후 자막이 엉뚱한 위치에 찍히는 것을 줄인다.
+        if (
+          activeWs?.readyState === WebSocket.OPEN &&
+          Math.abs(latestVideoMs - prevVideoMs) > 2000
+        ) {
+          lastSyncAudioMs = sentAudioMs;
+          activeWs.send(
+            JSON.stringify({
+              type: "time_sync",
+              audio_ms: Math.round(sentAudioMs),
+              video_ms: Math.round(latestVideoMs),
+            }),
+          );
+        }
       }
     } else if (msg.type === "SET_CAPTURE_MUTED") {
       // 광고 구간 무음 처리 on/off

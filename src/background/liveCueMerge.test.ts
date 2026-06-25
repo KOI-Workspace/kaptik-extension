@@ -54,15 +54,14 @@ describe("upsertLiveCue", () => {
     expect(result).toHaveLength(2);
   });
 
-  it("긴 텍스트 완전 중복이 2초 이상 떨어져 있으면 별도 발화로 둔다 (Stage2 지연 도착 방지)", () => {
-    // 화자가 같은 문장을 반복하거나 ASR 파이프라인이 다른 ts로 동일 텍스트를 보낼 때,
-    // Stage2가 역순으로 도착해도 기존 자막 위치가 바뀌지 않아야 한다.
+  it("긴 텍스트 완전 중복이 2초 이상 떨어져 있으면 별도 발화로 둔다 (진짜 반복 발화 보존)", () => {
+    // 화자가 실제로 같은 말을 반복한 경우 두 줄 모두 패널에 표시돼야 한다.
+    // cached 경로의 중복은 background/index.ts에서 별도로 처리한다.
     const result = upsertLiveCue(
       [cue(15.383, "들키는 게 낫냐?", "Is it better to get caught?")],
       cue(11.785, "들키는 게 낫냐?", "Is it better to get caught?"),
       "en",
     );
-
     expect(result).toHaveLength(2);
   });
 

@@ -1,7 +1,7 @@
 {
   "name": "kaptik-extension",
   "version": "0.1.0",
-  "description": "Enjoy K-pop videos with the best quality subtitles.",
+  "description": "High quality subtitles optimized for Korean videos.",
   "private": true,
   "type": "module",
   "scripts": {

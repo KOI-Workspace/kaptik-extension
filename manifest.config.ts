@@ -11,7 +11,7 @@ export default function getManifest(mode: string) {
   const isDev = mode !== "production";
   return defineManifest({
     manifest_version: 3,
-    name: "Kaptik - Understand every moment for your bias",
+    name: "Kaptik",
     version: pkg.version,
     description: pkg.description,
     icons: {

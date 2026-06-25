@@ -69,8 +69,10 @@ export interface Annotation {
   term?: string;
   /** 주석 제목 */
   title: string;
-  /** 주석 본문 설명 */
-  description: string;
+  /** 이 개념이 무엇인지 (1–2 sentences) */
+  what: string;
+  /** 발화와 어떻게 이어지는지 (1 sentence) */
+  why: string;
 }
 
 /** 단일 자막 큐 (한 줄의 발화) */

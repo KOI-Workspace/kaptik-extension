@@ -44,9 +44,9 @@ export const MOCK_CUES: SubtitleCue[] = [
     annotations: [
       {
         term: "40-kilometer march",
-        title: "40km March",
-        description:
-          "혹독한 1월 기초군사훈련 행군. V의 ‘이맘때’ 한마디가 군 시절 기억을 곧장 소환했어요.",
+        title: "40km March (행군)",
+        what: "A grueling long-distance march that is a mandatory part of South Korean military basic training, typically carried out in full gear regardless of weather.",
+        why: "V’s phrase ‘around this time of year’ triggered a vivid memory of his military service, as the march was held during that season.",
       },
     ],
   },
@@ -85,14 +85,6 @@ export const MOCK_CUES: SubtitleCue[] = [
       "zh-CN": "还是这么犀利，哥。",
       id: "Masih tajam, hyung.",
     },
-    annotations: [
-      {
-        term: "hyung",
-        title: "Hyung (형)",
-        description:
-          "남성이 손위 남성을 부르는 호칭. 멤버 사이의 친근함과 위계가 동시에 담겨 있어요.",
-      },
-    ],
   },
   {
     start: 19.0,

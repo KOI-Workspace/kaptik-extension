@@ -260,8 +260,13 @@ export function SidePanel({
                             </button>
                           </div>
                           <p className="kaptik-annotation-desc">
-                            {ann.description}
+                            {ann.what}
                           </p>
+                          {ann.why && (
+                            <p className="kaptik-annotation-why">
+                              {ann.why}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );

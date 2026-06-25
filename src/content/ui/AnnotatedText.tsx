@@ -95,14 +95,13 @@ export function AnnotatedText({
         <button
           key={`badge-${i}`}
           type="button"
-          className={"kaptik-term-badge" + (openIndex === i ? " is-open" : "")}
+          className={"kaptik-term" + (openIndex === i ? " is-open" : "")}
           onClick={(e) => {
             e.stopPropagation(); // 텍스트 행의 seek로 전파 방지
             onToggle(i);
           }}
-          aria-label={`맥락 보기: ${annotations[i].title}`}
         >
-          ⓘ
+          {annotations[i].title}
         </button>
       ))}
     </span>

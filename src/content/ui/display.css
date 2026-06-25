@@ -413,16 +413,6 @@
   color: #d4c4ff;
 }
 
-.kaptik-term-badge {
-  border: none;
-  background: transparent;
-  color: var(--brand);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 0 2px;
-  vertical-align: middle;
-}
-
 /* ── 주석 카드 (부드러운 펼침/접힘) ── */
 /* grid-template-rows 0fr↔1fr 전환으로 높이를 애니메이션한다.
    카드를 항상 렌더하므로 펼칠 때뿐 아니라 접힐 때도 부드럽게 동작한다. */

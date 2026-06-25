@@ -46,12 +46,13 @@ export default function getManifest(mode: string) {
         all_frames: false,
       },
     ],
-    permissions: ["storage", "notifications", "tabs", "cookies", "tabCapture", "activeTab", "offscreen", "alarms", "scripting"],
+    permissions: ["storage", "notifications", "tabs", "cookies", "tabCapture", "activeTab", "offscreen", "alarms"],
     host_permissions: [
       "*://*.youtube.com/*",
       "*://*.weverse.io/*",
       "*://*.instagram.com/*",
       "https://api.kaptik.site/*",
+      "https://kaptik.site/*",
       ...(isDev ? ["http://localhost:8000/*"] : []),
     ],
   });

@@ -10,7 +10,7 @@ import {
   createJob,
   fetchLiveSubtitles,
 } from "@/api/client";
-import { getSettings } from "@/shared/settings";
+import { getSettings, updateSettings } from "@/shared/settings";
 import {
   getLocalStatus,
   startLocalJob,
@@ -1180,4 +1180,26 @@ setInterval(() => {
 // 클릭 시 알림 닫기
 chrome.notifications?.onClicked.addListener((id) => {
   chrome.notifications.clear(id);
+});
+
+// kaptik.site 로그인 쿠키 감시 → 확장 auth 상태 자동 동기화
+const KAPTIK_COOKIE_URL = "https://kaptik.site";
+const KAPTIK_COOKIE_NAME = "kaptik_token";
+
+async function syncAuthFromCookie(token: string | null) {
+  if (token) {
+    await updateSettings({ authToken: token, loggedIn: true });
+  } else {
+    await updateSettings({ authToken: "", loggedIn: false });
+  }
+}
+
+// 서비스 워커 시작 시 이미 로그인된 상태이면 즉시 반영
+void chrome.cookies
+  .get({ url: KAPTIK_COOKIE_URL, name: KAPTIK_COOKIE_NAME })
+  .then((cookie) => syncAuthFromCookie(cookie?.value ?? null));
+
+chrome.cookies.onChanged.addListener(({ cookie, removed }) => {
+  if (cookie.domain !== "kaptik.site" || cookie.name !== KAPTIK_COOKIE_NAME) return;
+  void syncAuthFromCookie(removed ? null : cookie.value);
 });

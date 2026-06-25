@@ -72,15 +72,15 @@ export const DEFAULT_SETTINGS: KaptikSettings = {
   showPanel: true,
   notifyOnReady: true,
   plan: "free",
-  profileName: "Jiwoo Kim",
+  profileName: "",
   serverUrl: import.meta.env.VITE_SERVER_URL ?? "ws://localhost:8000",
-  authToken: import.meta.env.VITE_AUTH_TOKEN ?? "",
+  authToken: "",
   devMode: false,
-  loggedIn: true,
+  loggedIn: false,
 };
 
 /** 결제/업그레이드 페이지 URL (백엔드 연동 전 placeholder) */
-export const PRICING_URL = "https://kaptik.app/pricing";
+export const PRICING_URL = "https://kaptik.site/pricing";
 
 /**
  * 저장된 설정을 읽어 기본값과 병합해 반환한다.
@@ -90,12 +90,12 @@ export const PRICING_URL = "https://kaptik.app/pricing";
 export async function getSettings(): Promise<KaptikSettings> {
   const result = await chrome.storage.local.get(SETTINGS_KEY);
   const stored = result[SETTINGS_KEY] ?? {};
-  // serverUrl·authToken은 빌드 시 env로 고정 — 저장된 구버전 값이 남아도 무시
+  // serverUrl은 빌드 시 env로 고정 — 저장된 구버전 값이 남아도 무시
+  // authToken은 kaptik.site 쿠키 감시로 background에서 동적으로 저장하므로 storage 값 사용
   return {
     ...DEFAULT_SETTINGS,
     ...stored,
     serverUrl: DEFAULT_SETTINGS.serverUrl,
-    authToken: DEFAULT_SETTINGS.authToken,
   };
 }
 

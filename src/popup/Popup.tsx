@@ -15,7 +15,7 @@ import {
   startGeneration,
   setLiveLang,
 } from "@/shared/messaging";
-import { fetchUserProfile, patchUserProfile } from "@/api/client";
+import { patchUserProfile } from "@/api/client";
 import {
   LANGUAGE_LABELS,
   SUBTITLE_LANGUAGE_CODES,
@@ -238,14 +238,8 @@ export function Popup() {
     });
   };
 
-  const handleLogin = async () => {
-    await patch({ loggedIn: true });
-    try {
-      const profile = await fetchUserProfile(settings.serverUrl, settings.authToken);
-      await patch({ language: profile.subtitle_lang as LanguageCode });
-    } catch {
-      // 네트워크 오류 시 로컬 기본값 유지
-    }
+  const handleLogin = () => {
+    void chrome.tabs.create({ url: "https://kaptik.site/login" });
   };
 
   const handleLogout = () => {

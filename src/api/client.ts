@@ -11,6 +11,17 @@ import { getMockTrack } from "./mockSubtitles";
 /** API 호출 타임아웃(ms) */
 const TIMEOUT_MS = 6000;
 
+/** 서버 API 에러. status와 detail을 포함해 호출부에서 분기 가능. */
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly detail: string,
+  ) {
+    super(detail || `HTTP ${status}`);
+    this.name = "ApiError";
+  }
+}
+
 /** ws(s):// → http(s):// 변환. REST API 호출에 사용. */
 export function wsUrlToHttp(url: string): string {
   return url.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
@@ -75,7 +86,11 @@ async function fetchJson<T>(
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      let detail = "";
+      try { detail = ((await res.json()) as { detail?: string }).detail ?? ""; } catch { /* non-JSON body */ }
+      throw new ApiError(res.status, detail);
+    }
     return (await res.json()) as T;
   } finally {
     clearTimeout(timer);

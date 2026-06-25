@@ -9,6 +9,7 @@ import {
   fetchSubtitleTrack,
   createJob,
   fetchLiveSubtitles,
+  ApiError,
 } from "@/api/client";
 import { getSettings, updateSettings } from "@/shared/settings";
 import {
@@ -382,6 +383,9 @@ async function handleStartGeneration(
     jobId = result.jobId;
   } catch (e) {
     console.error("[Kaptik BG] Job 생성 실패:", e);
+    if (e instanceof ApiError && e.status === 403) {
+      return { type: "ERR_PLAN_REQUIRED" };
+    }
     return { type: "ERR", error: e instanceof Error ? e.message : "Job 생성 실패" };
   }
 
@@ -427,6 +431,8 @@ function openJobSocket(
         console.error(`[Kaptik BG YT] Job ${jobId} 오류:`, String(msg.message ?? ""));
                 ws.close();
         jobSockets.delete(jobId);
+        // 로컬 상태를 초기화해 팝업이 generating → none으로 전이되도록 함
+        void removeAvailable(platform, videoId);
       }
     } catch { /* malformed JSON */ }
   };
@@ -953,6 +959,10 @@ async function handleStartStreaming(
         onCueReady,
         (err, code) => {
           console.error(`[Kaptik BG YT] 스트리밍 오류 tabId=${tabId}:`, err);
+          if (code === "plan_required") {
+            // 서버가 plan 부족을 알림 — 로컬 plan을 basic으로 갱신
+            void updateSettings({ plan: "basic" });
+          }
           const msg: BroadcastMessage = { type: "STREAMING_ERROR", message: err };
           chrome.tabs.sendMessage(tabId, msg).catch(() => {});
           if (code === "not_found") {

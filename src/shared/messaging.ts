@@ -24,7 +24,8 @@ export type ResponseMessage =
   | { type: "STREAMING_STARTED" }
   | { type: "LIVE_ACTIVE"; active: boolean }
   | { type: "LIVE_CUES"; videoId: string; cues: SubtitleCue[] }
-  | { type: "ERR"; error: string };
+  | { type: "ERR"; error: string }
+  | { type: "ERR_PLAN_REQUIRED" };
 
 /** background → content 브로드캐스트 */
 export type BroadcastMessage =
@@ -84,8 +85,9 @@ export async function startGeneration(
   videoId: string,
   force = false,
   language?: string,
-): Promise<number | null> {
+): Promise<number | null | "plan_required"> {
   const res = await send({ type: "START_GENERATION", platform, videoId, force, language });
+  if (res?.type === "ERR_PLAN_REQUIRED") return "plan_required";
   return res?.type === "GENERATION_STARTED" ? res.etaSeconds : null;
 }
 

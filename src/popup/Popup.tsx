@@ -168,7 +168,10 @@ export function Popup() {
     setStatus({ state: "generating", etaSeconds: 0, progress: 0 });
     // 시작 전 고른 언어를 명시 전달 — patch(storage 쓰기) 완료 전 race condition 방지
     void startGeneration(target.platform, target.videoId, false, settings.language).then((eta) => {
-      if (eta === null) {
+      if (eta === "plan_required") {
+        // 서버가 plan 부족을 알림 — 로컬 plan을 basic으로 업데이트하고 잠금 표시
+        patch({ plan: "basic" as any });
+      } else if (eta === null) {
         setStatus({ state: "failed" });
       } else {
         setStatus((prev) =>
@@ -228,7 +231,9 @@ export function Popup() {
     prevStatusStateRef.current = "generating";
     setStatus({ state: "generating", etaSeconds: 0, progress: 0 });
     void startGeneration(target.platform, target.videoId, false, newLang).then((eta) => {
-      if (eta === null) {
+      if (eta === "plan_required") {
+        patch({ plan: "basic" as any });
+      } else if (eta === null) {
         setStatus({ state: "failed" });
       } else {
         setStatus((prev) =>

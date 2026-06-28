@@ -41,8 +41,10 @@ export function findActiveCueIndex(cues: SubtitleCue[], currentTime: number): nu
   return -1;
 }
 
-/** 라이브 엣지 판정 허용 오차(초). 오디오 파이프라인 지연(~13초)을 커버한다. */
-const LIVE_EDGE_TOLERANCE_SEC = 20;
+/** seekable.end() 기준 라이브 엣지 판정 오차(초). HLS 플레이어가 세그먼트를 ~30초 미리 당겨 seekable에 반영하므로 그보다 여유를 둔다. */
+const LIVE_EDGE_SEEKABLE_TOLERANCE_SEC = 45;
+/** 마지막 cue의 end 이후 최대 몇 초까지 오버레이를 유지할지. 오디오 파이프라인 지연(~13s) - cue 길이(~6s) = ~7s 소모 후 약 13초 여유를 준다. */
+const LIVE_EDGE_CUE_TOLERANCE_SEC = 20;
 
 /**
  * 현재 재생 위치가 라이브 엣지(실시간 끝부분)에 가까운지 확인한다.
@@ -51,7 +53,7 @@ const LIVE_EDGE_TOLERANCE_SEC = 20;
 export function isNearLiveEdge(
   currentTime: number,
   seekableEnd: number | null,
-  toleranceSec = LIVE_EDGE_TOLERANCE_SEC,
+  toleranceSec = LIVE_EDGE_SEEKABLE_TOLERANCE_SEC,
 ): boolean {
   if (seekableEnd == null || !Number.isFinite(seekableEnd)) return true;
   return seekableEnd - currentTime <= toleranceSec;
@@ -80,7 +82,7 @@ export function findDisplayCueIndex(
   if (active !== -1 || !isLiveEdge || cues.length === 0) return active;
 
   const last = cues[cues.length - 1];
-  return Math.abs(last.start - currentTime) <= LIVE_EDGE_TOLERANCE_SEC
+  return currentTime >= last.start && currentTime - last.end <= LIVE_EDGE_CUE_TOLERANCE_SEC
     ? cues.length - 1
     : -1;
 }
@@ -105,7 +107,7 @@ export function useActiveIndex(
     let last = -2;
 
     const tick = () => {
-      const liveEdge = isLive && isNearLiveEdge(video.currentTime, getSeekableEnd(video));
+      const liveEdge = isLive && isNearLiveEdge(video.currentTime, getSeekableEnd(video), LIVE_EDGE_SEEKABLE_TOLERANCE_SEC);
       const found = findDisplayCueIndex(cues, video.currentTime, liveEdge);
       if (found !== last) {
         last = found;

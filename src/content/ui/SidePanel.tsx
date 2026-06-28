@@ -67,12 +67,10 @@ export function SidePanel({
     list.scrollTop = rowRelTop - list.clientHeight + row.clientHeight + 18;
   };
 
-  // 라이브: 맨 아래를 보고 있으면 새 cue 도착 시 자동 스크롤
+  // 라이브: 활성 cue를 보고 있으면 새 cue 도착 시 자동 스크롤
   useEffect(() => {
     if (!isLive) return;
-    if (atBottom && listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
+    if (atBottom) scrollActiveRowToBottom();
   }, [activeIndex, atBottom, isLive, track.cues.length]);
 
   // VOD: activeIndex가 아래쪽을 벗어나면 활성 cue를 패널 하단 근처에 맞춘다.
@@ -98,27 +96,22 @@ export function SidePanel({
   const handleScroll = () => {
     const el = listRef.current;
     if (!el) return;
-    if (!isLive) {
-      // VOD: 활성 cue가 보이면 버튼 숨김, 스크롤로 벗어나면 버튼 표시
-      const row = activeRowRef.current;
-      if (!row) { setAtBottom(true); return; }
-      const listRect = el.getBoundingClientRect();
-      const rowRect = row.getBoundingClientRect();
-      setAtBottom(rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom);
-      return;
-    }
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setAtBottom(distance < 48);
+    // 라이브·VOD 모두: 활성 cue가 보이면 버튼 숨김, 벗어나면 버튼 표시
+    const row = activeRowRef.current;
+    if (!row) { setAtBottom(true); return; }
+    const listRect = el.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    setAtBottom(rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom);
   };
 
   const scrollToLatest = () => {
-    if (isLive) {
-      const el = listRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-      setAtBottom(true);
-    } else if (activeRowRef.current && listRef.current) {
-      // VOD: 현재 활성 cue를 패널 하단 근처로
+    if (activeRowRef.current && listRef.current) {
       scrollActiveRowToBottom();
+      setAtBottom(true);
+    } else if (isLive && listRef.current) {
+      // 아직 활성 cue가 없는 경우에만 절대 맨 아래로 폴백
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+      setAtBottom(true);
     }
   };
 

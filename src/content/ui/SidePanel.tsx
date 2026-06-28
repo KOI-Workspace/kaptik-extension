@@ -302,6 +302,7 @@ export function SidePanel({
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                     <path d="M3 2a1 1 0 0 0-1 1v11.5a.5.5 0 0 0 1 0V9h9.5a.5.5 0 0 0 .354-.854L9.707 5 12.854 1.854A.5.5 0 0 0 12.5 1H3a1 1 0 0 0-1 1v.5H3V2z"/>
                   </svg>
+                  <span className="kaptik-report-label">Report</span>
                 </button>
               </div>
             );

@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { SubtitleTrack } from "@/types/subtitle";
+import type { SubtitleCue, SubtitleTrack } from "@/types/subtitle";
 import type { KaptikSettings } from "@/shared/settings";
 import { PRICING_URL, isPaid, getEffectivePlan } from "@/shared/settings";
 import { getMessages } from "@/shared/i18n";
 import { resolveMember } from "@/shared/members";
 import { Avatar } from "./Avatar";
 import { AnnotatedText } from "./AnnotatedText";
+import { ReportModal } from "./ReportModal";
 import { pickText } from "./pickText";
 
 interface SidePanelProps {
@@ -53,6 +54,7 @@ export function SidePanel({
   const activeRowRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [open, setOpen] = useState<OpenAnnotation | null>(null);
+  const [reportingCue, setReportingCue] = useState<{ index: number; cue: SubtitleCue } | null>(null);
 
   // 선택 언어에 맞춘 UI 텍스트
   const t = getMessages(settings.language);
@@ -70,8 +72,9 @@ export function SidePanel({
   // 라이브: 활성 cue를 보고 있으면 새 cue 도착 시 자동 스크롤
   useEffect(() => {
     if (!isLive) return;
+    if (reportingCue) return;
     if (atBottom) scrollActiveRowToBottom();
-  }, [activeIndex, atBottom, isLive, track.cues.length]);
+  }, [activeIndex, atBottom, isLive, track.cues.length, reportingCue]);
 
   const prevIndexRef = useRef(activeIndex);
 
@@ -79,7 +82,7 @@ export function SidePanel({
   // 보라색 표시가 아래로 내려오다가 하단에 닿은 뒤에는 목록이 한 줄씩 따라 내려가는 UX다.
   // useLayoutEffect: paint 전에 실행되므로 잘못된 스크롤 위치가 화면에 보이지 않는다.
   useLayoutEffect(() => {
-    if (isLive || !activeRowRef.current || !listRef.current) return;
+    if (isLive || reportingCue || !activeRowRef.current || !listRef.current) return;
 
     const prevIndex = prevIndexRef.current;
     if (activeIndex === prevIndex) return;
@@ -210,7 +213,7 @@ export function SidePanel({
                 className={"kaptik-row" + (isActive ? " is-active" : "")}
               >
                 {settings.showSpeaker && member && <Avatar member={member} size={34} />}
-                <div className="kaptik-row-main">
+                <div className="kaptik-row-main" style={{ flex: "1 1 auto", minWidth: 0 }}>
                   <div className="kaptik-row-head">
                     {settings.showSpeaker && member?.name && (
                       <span
@@ -287,11 +290,35 @@ export function SidePanel({
                     );
                   })}
                 </div>
+                <button
+                  type="button"
+                  className="kaptik-report-btn"
+                  title="Report subtitle"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setReportingCue({ index: cueIndex, cue });
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M3 2a1 1 0 0 0-1 1v11.5a.5.5 0 0 0 1 0V9h9.5a.5.5 0 0 0 .354-.854L9.707 5 12.854 1.854A.5.5 0 0 0 12.5 1H3a1 1 0 0 0-1 1v.5H3V2z"/>
+                  </svg>
+                </button>
               </div>
             );
           })
         )}
       </div>
+
+      {reportingCue && (
+        <ReportModal
+          platform={track.platform}
+          videoId={track.videoId}
+          cue={reportingCue.cue}
+          cueIndex={reportingCue.index}
+          language={settings.language}
+          onClose={() => setReportingCue(null)}
+        />
+      )}
 
       {isPaid(getEffectivePlan(settings)) && !atBottom && (
         <button

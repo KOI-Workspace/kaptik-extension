@@ -9,6 +9,7 @@ import {
   fetchSubtitleTrack,
   createJob,
   fetchLiveSubtitles,
+  submitReport,
   ApiError,
 } from "@/api/client";
 import { getSettings, updateSettings } from "@/shared/settings";
@@ -81,6 +82,9 @@ const pendingLiveStarts = new Map<number, PendingLiveStart>();
 
 /** jobId → 진행 모니터링 WebSocket */
 const jobSockets = new Map<string, WebSocket>();
+
+/** platform:videoId → server job_id (신고 시 cue_id 생성용) */
+const vodJobIds = new Map<string, string>();
 
 function clearPendingLiveStart(tabId: number): void {
   const pending = pendingLiveStarts.get(tabId);
@@ -382,6 +386,7 @@ async function handleStartGeneration(
   try {
     const result = await createJob({ serverUrl, authToken, url, targetLang: language, force: force || undefined });
     jobId = result.jobId;
+    vodJobIds.set(cacheKey(platform, videoId), jobId);
   } catch (e) {
     console.error("[Kaptik BG] Job 생성 실패:", e);
     if (e instanceof ApiError && e.status === 403) {
@@ -1153,6 +1158,41 @@ chrome.runtime.onMessage.addListener(
           case "SET_LIVE_LANG": {
             handleSetLiveLang(req.tabId, req.language);
             return { type: "ERR", error: "" };
+          }
+          case "REPORT_CUE": {
+            const tabId = sender.tab?.id;
+            const tabUrl = sender.tab?.url ?? "";
+            const liveSession = tabId != null ? liveSessions.get(tabId) : undefined;
+            const isLiveCue = !!liveSession;
+            const sourceId = isLiveCue
+              ? liveSession.sessionId
+              : (vodJobIds.get(cacheKey(req.platform, req.videoId)) ?? null);
+
+            const reportSettings = await getSettings();
+            const authToken = reportSettings.devMode ? "dev" : reportSettings.authToken;
+            try {
+              await submitReport({
+                serverUrl: reportSettings.serverUrl,
+                authToken,
+                body: {
+                  type: isLiveCue ? "live" : "vod",
+                  job_id: sourceId,
+                  cue_id: sourceId ? `${sourceId}_${req.cueIndex}` : `unknown_${req.cueIndex}`,
+                  url: tabUrl,
+                  target_lang: req.language,
+                  reason_keys: req.reasonKeys,
+                  note: req.note,
+                  text_ko: req.textKo ?? null,
+                  translation: req.translation,
+                  start_ms: Math.round(req.cueStart * 1000),
+                  end_ms: Math.round(req.cueEnd * 1000),
+                },
+              });
+              return { type: "REPORT_OK" };
+            } catch (e) {
+              console.error("[Kaptik BG] 신고 전송 실패:", e);
+              return { type: "ERR", error: e instanceof Error ? e.message : "신고 전송 실패" };
+            }
           }
           default:
             return { type: "ERR", error: "알 수 없는 메시지" };

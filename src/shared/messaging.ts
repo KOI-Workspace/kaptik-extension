@@ -14,7 +14,20 @@ export type RequestMessage =
   // alwaysCapture(Weverse) 자막 UI를 Start 이후에만 마운트하기 위한 단일 진실 소스.
   | { type: "IS_LIVE_ACTIVE"; tabId?: number }
   // 라이브 캡처 중 자막 언어를 바꾼다 (offscreen WS에 set_lang 전송 → 이후 자막부터 새 언어).
-  | { type: "SET_LIVE_LANG"; tabId: number; language: string };
+  | { type: "SET_LIVE_LANG"; tabId: number; language: string }
+  | {
+      type: "REPORT_CUE";
+      platform: Platform;
+      videoId: string;
+      cueIndex: number;
+      cueStart: number;
+      cueEnd: number;
+      textKo: string | undefined;
+      translation: string;
+      language: string;
+      reasonKeys: string[];
+      note: string;
+    };
 
 /** background → 요청자 응답 메시지 */
 export type ResponseMessage =
@@ -24,6 +37,7 @@ export type ResponseMessage =
   | { type: "STREAMING_STARTED" }
   | { type: "LIVE_ACTIVE"; active: boolean }
   | { type: "LIVE_CUES"; videoId: string; cues: SubtitleCue[] }
+  | { type: "REPORT_OK" }
   | { type: "ERR"; error: string }
   | { type: "ERR_PLAN_REQUIRED" }
   | { type: "ERR_MONTHLY_LIMIT" };
@@ -103,4 +117,21 @@ export async function isLiveActive(tabId?: number): Promise<boolean> {
 /** 라이브 캡처 중 자막 언어를 변경한다 (이후 자막부터 새 언어로 번역). */
 export function setLiveLang(tabId: number, language: string): void {
   void chrome.runtime.sendMessage({ type: "SET_LIVE_LANG", tabId, language });
+}
+
+/** 자막 한 줄을 신고한다. 성공 시 true, 실패 시 false 반환. */
+export async function reportCue(payload: {
+  platform: Platform;
+  videoId: string;
+  cueIndex: number;
+  cueStart: number;
+  cueEnd: number;
+  textKo: string | undefined;
+  translation: string;
+  language: string;
+  reasonKeys: string[];
+  note: string;
+}): Promise<boolean> {
+  const res = await send<ResponseMessage>({ type: "REPORT_CUE", ...payload });
+  return res?.type === "REPORT_OK";
 }

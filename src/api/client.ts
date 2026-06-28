@@ -209,3 +209,28 @@ export async function fetchJob(opts: {
   const tokenParam = opts.authToken ? `?token=${encodeURIComponent(opts.authToken)}` : "";
   return fetchJson<JobResponse>(`${base}/jobs/${opts.jobId}${tokenParam}`, { authToken: opts.authToken });
 }
+
+/** POST /reports — 자막 신고를 서버에 전송한다. */
+export async function submitReport(opts: {
+  serverUrl: string;
+  authToken: string;
+  body: {
+    type: string;
+    job_id: string | null;
+    cue_id: string;
+    url: string;
+    target_lang: string;
+    reason_keys: string[];
+    note: string;
+    text_ko: string | null;
+    translation: string;
+    start_ms: number;
+    end_ms: number;
+  };
+}): Promise<{ report_id: string; created_at: number }> {
+  const base = wsUrlToHttp(opts.serverUrl);
+  return fetchJson<{ report_id: string; created_at: number }>(
+    `${base}/reports`,
+    { method: "POST", body: opts.body, authToken: opts.authToken },
+  );
+}

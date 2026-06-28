@@ -482,6 +482,15 @@
   word-break: keep-all;
 }
 
+.kaptik-annotation-why {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: #d8d2ea;
+  word-break: keep-all;
+  margin-top: 6px;
+}
+
 /* ── Latest 버튼 ── */
 .kaptik-latest {
   position: absolute;

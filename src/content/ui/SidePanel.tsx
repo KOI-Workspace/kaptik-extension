@@ -73,17 +73,39 @@ export function SidePanel({
     if (atBottom) scrollActiveRowToBottom();
   }, [activeIndex, atBottom, isLive, track.cues.length]);
 
+  const prevIndexRef = useRef(activeIndex);
+
   // VOD: activeIndex가 아래쪽을 벗어나면 활성 cue를 패널 하단 근처에 맞춘다.
   // 보라색 표시가 아래로 내려오다가 하단에 닿은 뒤에는 목록이 한 줄씩 따라 내려가는 UX다.
   // useLayoutEffect: paint 전에 실행되므로 잘못된 스크롤 위치가 화면에 보이지 않는다.
   useLayoutEffect(() => {
     if (isLive || !activeRowRef.current || !listRef.current) return;
+
+    const prevIndex = prevIndexRef.current;
+    if (activeIndex === prevIndex) return;
+
+    prevIndexRef.current = activeIndex;
+
     const list = listRef.current;
     const row = activeRowRef.current;
     const listRect = list.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
+
     // 이미 완전히 보이면 스크롤하지 않음
-    if (rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom) return;
+    // (예: 사용자가 이전 자막을 클릭해서 비디오를 이동한 경우)
+    if (rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom) {
+      if (!atBottom) {
+        setAtBottom(true);
+      }
+      return;
+    }
+
+    // 자연스러운 진행(다음 자막)인데 사용자가 스크롤을 벗어난 상태(!atBottom)라면 강제 스크롤하지 않음
+    const isNaturalProgression = activeIndex === prevIndex + 1;
+    if (isNaturalProgression && !atBottom) {
+      return;
+    }
+
     if (rowRect.bottom > listRect.bottom) {
       scrollActiveRowToBottom();
       return;
@@ -91,7 +113,7 @@ export function SidePanel({
     // 뒤로 이동한 경우에는 선택한 줄이 바로 보이도록 위쪽에 맞춘다.
     const rowRelTop = rowRect.top - listRect.top + list.scrollTop;
     list.scrollTop = Math.max(0, rowRelTop - 10);
-  }, [activeIndex, isLive]);
+  }, [activeIndex, isLive, atBottom]);
 
   const handleScroll = () => {
     const el = listRef.current;

@@ -782,14 +782,20 @@ function handleSetLiveLang(tabId: number, language: string): void {
     if (existingCues.length === 0) {
       void readLiveCues(session.platform, session.videoId, language).then((rawStoredCues) => {
         const storedCues = compactLiveCues(rawStoredCues, language);
-        if (session.language !== language) return;
+        // 로컬 cue는 항상 다음 단계로 전달 (언어 변경 여부 무관)
         if (storedCues.length > 0) return storedCues;
+        // 서버 fetch는 현재 언어일 때만 (불필요한 네트워크 요청 방지)
+        if (session.language !== language) return undefined;
         return fetchStoredLiveCuesFromServer(session.platform, session.videoId, language, session.videoUrl);
       }).then((cues) => {
-        if (!cues || cues.length === 0 || session.language !== language) return;
+        if (!cues || cues.length === 0) return;
         const compactedCues = compactLiveCues(cues, language);
-        session.cuesByLang.set(language, compactedCues);
-        // 화면은 이미 LANG_SWITCHED로 클리어됐으므로 CUE_READY로 채운다
+        // 항상 메모리에 저장 → 나중에 이 언어로 돌아올 때 즉시 복원 가능
+        if ((session.cuesByLang.get(language) ?? []).length === 0) {
+          session.cuesByLang.set(language, compactedCues);
+        }
+        // CUE_READY는 현재 언어일 때만 전송
+        if (session.language !== language) return;
         const storedMsg: BroadcastMessage = { type: "CUE_READY", videoId: session.videoId, cues: compactedCues };
         chrome.tabs.sendMessage(tabId, storedMsg).catch(() => {});
       });

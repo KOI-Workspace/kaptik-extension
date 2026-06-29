@@ -16,10 +16,15 @@ function normalizeCueEnds(cues: SubtitleCue[]): SubtitleCue[] {
 export function upsertLiveCue(cues: SubtitleCue[], cue: SubtitleCue, language: string): SubtitleCue[] {
   const nextCues = [...cues];
   
-  const existingIdx = cue.utteranceId
+  // uid 우선 매칭, 실패 시 timestamp+speakerId fallback (uid 없는 구형 cue 포함)
+  let existingIdx = cue.utteranceId
     ? nextCues.findIndex((c) => c.utteranceId === cue.utteranceId)
-    // fallback for legacy cues without utteranceId
-    : nextCues.findIndex((c) => Math.abs(c.start - cue.start) < 0.1 && c.speakerId === cue.speakerId);
+    : -1;
+  if (existingIdx < 0) {
+    existingIdx = nextCues.findIndex(
+      (c) => Math.abs(c.start - cue.start) < 0.1 && c.speakerId === cue.speakerId,
+    );
+  }
 
   if (existingIdx >= 0) {
     const existing = nextCues[existingIdx];

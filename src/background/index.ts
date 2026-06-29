@@ -865,18 +865,20 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
       }
     }
 
+    const utteranceIdStr = data.utterance_id ? String(data.utterance_id) : undefined;
+
     const isDuplicate = isDuplicateLiveStage1({
       existingCues: existingLangCues,
       pendingCues: [...session.pending.values()],
       startMs: normalizedMs,
       textKo: text_ko,
+      utteranceId: utteranceIdStr,
     });
     if (isDuplicate) {
       console.info(`[Kaptik BG Live] Stage1 중복 스킵 (ts=${normalizedMs}ms, 이미 번역됨)`);
       return;
     }
 
-    const utteranceIdStr = data.utterance_id ? String(data.utterance_id) : undefined;
     const key = utteranceIdStr || ts;
     session.pending.set(key, {
       text_ko,
@@ -884,7 +886,7 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
       cached: Boolean(data.cached),
       startMs: normalizedMs,
       language: session.language,
-      utteranceId: data.utterance_id ? String(data.utterance_id) : undefined,
+      utteranceId: utteranceIdStr,
     });
     console.debug(`[Kaptik BG Live] STT stage1 ts=${ts}ms: "${text_ko}"`);
     return;

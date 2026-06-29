@@ -7,6 +7,7 @@ const CACHED_TS_MATCH_MS = 1000;
 export interface PendingLiveCue {
   text_ko: string;
   startMs: number;
+  utteranceId?: string;
 }
 
 function normalizeCueText(text: string): string {
@@ -42,7 +43,14 @@ export function isDuplicateLiveStage1(params: {
   pendingCues: PendingLiveCue[];
   startMs: number;
   textKo: string;
+  utteranceId?: string;
 }): boolean {
+  // uid 정확 매칭: 같은 uid가 이미 처리됐거나 pending 중이면 중복
+  if (params.utteranceId) {
+    if (params.existingCues.some((c) => c.utteranceId === params.utteranceId)) return true;
+    if (params.pendingCues.some((c) => c.utteranceId === params.utteranceId)) return true;
+  }
+
   const startSec = params.startMs / 1000;
 
   const duplicatedExisting = params.existingCues.some((cue) =>

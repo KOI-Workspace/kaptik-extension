@@ -1,87 +1,5 @@
 import type { LanguageCode, SubtitleCue } from "@/types/subtitle";
 
-const LONG_TEXT_MERGE_WINDOW_SEC = 8;
-const SHORT_TEXT_MERGE_WINDOW_SEC = 1.5;
-const SHORT_TEXT_MAX_LENGTH = 8;
-
-function normalizeText(text: string | undefined): string {
-  return (text ?? "")
-    .replace(/\s+/g, " ")
-    .replace(/[.?!。！？]+$/g, "")
-    .trim()
-    .toLowerCase();
-}
-
-function isRelatedText(a: string | undefined, b: string | undefined): boolean {
-  const normalizedA = normalizeText(a);
-  const normalizedB = normalizeText(b);
-  if (!normalizedA || !normalizedB) return false;
-  if (normalizedA === normalizedB) return true;
-  const [shorter, longer] = normalizedA.length <= normalizedB.length
-    ? [normalizedA, normalizedB]
-    : [normalizedB, normalizedA];
-  // 짧은 쪽이 긴 쪽의 절반 미만이면 같은 발화의 점진적 업데이트가 아닌 다른 발화로 판단
-  if (shorter.length < longer.length * 0.5) return false;
-  return longer.includes(shorter);
-}
-
-function chooseLongerText(a: string | undefined, b: string | undefined): string | undefined {
-  if (!a) return b;
-  if (!b) return a;
-  return normalizeText(b).length > normalizeText(a).length ? b : a;
-}
-
-function shouldMergeCue(existing: SubtitleCue, next: SubtitleCue, language: string): boolean {
-  const timeDiff = Math.abs(existing.start - next.start);
-  const koRelated = isRelatedText(existing.text.ko, next.text.ko);
-  const translatedRelated = isRelatedText(
-    existing.text[language as LanguageCode],
-    next.text[language as LanguageCode],
-  );
-  if (!koRelated && !translatedRelated) return false;
-
-  const normalizedExistingKo = normalizeText(existing.text.ko ?? "");
-  const normalizedNextKo = normalizeText(next.text.ko ?? "");
-  const normalizedExistingTr = normalizeText(existing.text[language as LanguageCode] ?? "");
-  const normalizedNextTr = normalizeText(next.text[language as LanguageCode] ?? "");
-
-  // 텍스트가 완전히 동일한 경우는 짧은 병합 창(1.5초)만 허용한다.
-  // ASR 수정은 보통 텍스트가 늘어나는 방향이므로, 같은 텍스트가 2초 이상 떨어진 위치에서
-  // 오면 화자가 반복하거나 Stage2가 지연 도착한 다른 발화로 판단해 별도 줄로 유지한다.
-  const isExactDuplicate =
-    normalizedExistingKo.length > 0 &&
-    normalizedExistingKo === normalizedNextKo &&
-    normalizedExistingTr === normalizedNextTr;
-
-  const longestTextLength = Math.max(
-    normalizedExistingKo.length,
-    normalizedNextKo.length,
-    normalizedExistingTr.length,
-    normalizedNextTr.length,
-  );
-  const windowSec = isExactDuplicate || longestTextLength <= SHORT_TEXT_MAX_LENGTH
-    ? SHORT_TEXT_MERGE_WINDOW_SEC
-    : LONG_TEXT_MERGE_WINDOW_SEC;
-  return timeDiff <= windowSec;
-}
-
-function mergeCue(existing: SubtitleCue, next: SubtitleCue, language: string): SubtitleCue {
-  const lang = language as LanguageCode;
-  return {
-    ...existing,
-    start: Math.min(existing.start, next.start),
-    end: Math.max(existing.end, next.end),
-    speakerId: next.speakerId ?? existing.speakerId,
-    text: {
-      ...existing.text,
-      ...next.text,
-      ko: chooseLongerText(existing.text.ko, next.text.ko),
-      [lang]: chooseLongerText(existing.text[lang], next.text[lang]),
-    },
-    annotations: next.annotations?.length ? next.annotations : existing.annotations,
-  };
-}
-
 function normalizeCueEnds(cues: SubtitleCue[]): SubtitleCue[] {
   return cues.map((cue, index) => {
     const next = cues[index + 1];
@@ -97,10 +15,27 @@ function normalizeCueEnds(cues: SubtitleCue[]): SubtitleCue[] {
  */
 export function upsertLiveCue(cues: SubtitleCue[], cue: SubtitleCue, language: string): SubtitleCue[] {
   const nextCues = [...cues];
-  const mergeIndex = nextCues.findIndex((existing) => shouldMergeCue(existing, cue, language));
+  
+  const existingIdx = cue.utteranceId
+    ? nextCues.findIndex((c) => c.utteranceId === cue.utteranceId)
+    // fallback for legacy cues without utteranceId
+    : nextCues.findIndex((c) => Math.abs(c.start - cue.start) < 0.1 && c.speakerId === cue.speakerId);
 
-  if (mergeIndex >= 0) {
-    nextCues[mergeIndex] = mergeCue(nextCues[mergeIndex], cue, language);
+  if (existingIdx >= 0) {
+    const existing = nextCues[existingIdx];
+    const lang = language as LanguageCode;
+    nextCues[existingIdx] = {
+      ...existing,
+      ...cue,
+      start: Math.min(existing.start, cue.start),
+      end: Math.max(existing.end, cue.end),
+      text: {
+        ...existing.text,
+        ...cue.text,
+        ko: cue.text.ko ?? existing.text.ko,
+        [lang]: cue.text[lang] ?? existing.text[lang],
+      }
+    };
   } else {
     nextCues.push(cue);
   }

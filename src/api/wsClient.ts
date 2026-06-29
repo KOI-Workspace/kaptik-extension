@@ -40,6 +40,7 @@ interface WSErrorMessage {
 interface WSStage1Message {
   stage: 1;
   ts: number;
+  utterance_id?: string;
   text_ko?: string;
   speaker?: string;
 }
@@ -48,6 +49,7 @@ interface WSStage1Message {
 interface WSStage2Message {
   stage: 2;
   ts: number;
+  utterance_id?: string;
   translation?: string;
   annotations?: Annotation[];
   streaming?: boolean;
@@ -59,11 +61,12 @@ type WSMessage = WSAckMessage | WSStatusMessage | WSSpeakerIdentifiedMessage | W
 interface PendingStage1 {
   text_ko: string;
   speaker: string;
+  utteranceId?: string;
 }
 
 export class StreamingSession {
   private ws: WebSocket | null = null;
-  private pending = new Map<number, PendingStage1>();
+  private pending = new Map<string | number, PendingStage1>();
   private sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
   constructor(
@@ -135,22 +138,26 @@ export class StreamingSession {
       // Stage1: 한국어 원문 수신
       if (msg.stage === 1) {
         const ts = msg.ts;
-        this.pending.set(ts, {
+        const key = msg.utterance_id || ts;
+        this.pending.set(key, {
           text_ko: msg.text_ko ?? "",
           speaker: msg.speaker ?? "",
+          utteranceId: msg.utterance_id,
         });
         console.info(`[Kaptik WS] Stage1 t=${(ts / 1000).toFixed(1)}s: "${msg.text_ko ?? ""}"`);
       }
       // Stage2: 번역 완료 (streaming=true인 중간 토큰은 무시, final만 처리)
       if (msg.stage === 2 && !msg.streaming) {
         const ts = msg.ts;
-        const p = this.pending.get(ts);
+        const key = msg.utterance_id || ts;
+        const p = this.pending.get(key);
         if (!p) return;
-        this.pending.delete(ts);
+        this.pending.delete(key);
         const start = ts / 1000;
         const rawAnnotations = Array.isArray(msg.annotations) ? msg.annotations : [];
         const translatedText = msg.translation ?? "";
         const cue: SubtitleCue = {
+          utteranceId: p.utteranceId || msg.utterance_id,
           start,
           end: start + 6,
           speakerId: p.speaker || undefined,

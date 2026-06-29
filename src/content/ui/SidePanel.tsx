@@ -208,7 +208,7 @@ export function SidePanel({
 
             return (
               <div
-                key={cueIndex}
+                key={cue.utteranceId || cueIndex}
                 ref={isActive ? activeRowRef : null}
                 className={"kaptik-row" + (isActive ? " is-active" : "")}
               >

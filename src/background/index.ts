@@ -58,7 +58,7 @@ interface LiveSession {
   language: string;
   /** 언어별 독립 cue 배열. 언어를 바꿔도 이전 언어 내용을 버리지 않아, 돌아오면 이어서 볼 수 있다. */
   cuesByLang: Map<string, SubtitleCue[]>;
-  pending: Map<number, { text_ko: string; speaker: string; cached: boolean; startMs: number; language: string }>;
+  pending: Map<string | number, { text_ko: string; speaker: string; cached: boolean; startMs: number; language: string; utteranceId?: string }>;
   /** 광고 구간(영상 시각 ms). startMs~endMs 사이 ts를 가진 cue는 렌더링 제외 */
   adPeriods: AdPeriod[];
   /** 마지막으로 확인한 광고 상태. stage 메시지 도착 시 즉시 필터링에도 사용한다. */
@@ -855,12 +855,15 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
       return;
     }
 
-    session.pending.set(ts, {
+    const utteranceIdStr = data.utterance_id ? String(data.utterance_id) : undefined;
+    const key = utteranceIdStr || ts;
+    session.pending.set(key, {
       text_ko,
       speaker: String(data.speaker ?? ""),
       cached: Boolean(data.cached),
       startMs: normalizedMs,
       language: session.language,
+      utteranceId: data.utterance_id ? String(data.utterance_id) : undefined,
     });
     console.debug(`[Kaptik BG Live] STT stage1 ts=${ts}ms: "${text_ko}"`);
     return;
@@ -868,9 +871,11 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
 
   if (data.stage === 2 && !data.streaming) {
     const ts = Number(data.ts);
-    const p = session.pending.get(ts);
+    const utteranceIdStr = data.utterance_id ? String(data.utterance_id) : undefined;
+    const key = utteranceIdStr || ts;
+    const p = session.pending.get(key);
     if (!p) return;
-    session.pending.delete(ts);
+    session.pending.delete(key);
     const startMs = p.startMs > 0 ? p.startMs : normalizeLiveCueStartMs(session, ts);
 
     // 광고 구간 ts 필터: 감지 전/파이프라인 지연으로 서버에 전송된 광고 음성을 렌더링에서 제외
@@ -891,6 +896,7 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
     const textMap: SubtitleCue["text"] = { ko: p.text_ko };
     if (translated) textMap[cueLanguage as LanguageCode] = translated;
     const cue: SubtitleCue = {
+      utteranceId: p.utteranceId || (data.utterance_id ? String(data.utterance_id) : undefined),
       start,
       end: start + 6,
       speakerId: p.speaker || undefined,

@@ -77,6 +77,8 @@ export interface Annotation {
 
 /** 단일 자막 큐 (한 줄의 발화) */
 export interface SubtitleCue {
+  /** 발화 고유 식별자 (실시간 스트리밍 업데이트 매칭용) */
+  utteranceId?: string;
   /** 시작 시각(초) */
   start: number;
   /** 종료 시각(초) */

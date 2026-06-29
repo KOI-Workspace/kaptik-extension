@@ -43,7 +43,7 @@ export function CenterSubtitle({
           const isActive = startIdx + i === activeIndex;
           return (
             <div
-              key={i}
+              key={cue.utteranceId || i}
               className={"kaptik-center-line" + (isActive ? " is-active" : "")}
             >
               {settings.showSpeaker && member && (

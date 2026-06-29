@@ -831,6 +831,8 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
     console.error(`[Kaptik BG Live] 서버 에러 (tab ${tabId}): ${String(data.code ?? "")}`);
     if (data.code === "expired" || data.code === "plan_expired") {
       void updateSettings({ plan: "expired" });
+    } else if (data.code === "quota_exceeded") {
+      void setMonthlyLimit(session.platform, session.videoId);
     }
     return;
   }

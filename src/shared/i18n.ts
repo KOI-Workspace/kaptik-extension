@@ -71,6 +71,10 @@ export interface Messages {
   vodLockTitle: string;
   vodLockDesc: string;
   planTestLabel: string;
+  // 만료 (Expired)
+  expiredTitle: string;
+  expiredDesc: string;
+  expiredCta: string;
   // 패널
   panelTitle: string;
   panelEmpty: string;
@@ -141,6 +145,9 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     vodLockTitle: "Pro plan required for recorded videos",
     vodLockDesc: "Basic includes live streams only. Upgrade to Pro to generate subtitles for any video.",
     planTestLabel: "Plan (dev test)",
+    expiredTitle: "Your plan has expired",
+    expiredDesc: "Your access has ended. Please renew to continue using Kaptik.",
+    expiredCta: "Renew Plan",
     panelTitle: "Transcript",
     panelEmpty: "Subtitles will start soon",
     latest: "Latest",
@@ -206,6 +213,9 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     vodLockTitle: "録画動画はProプランが必要です",
     vodLockDesc: "Basicはライブ配信のみ対応しています。すべての動画に字幕を付けるにはProにアップグレードしてください。",
     planTestLabel: "プラン（テスト）",
+    expiredTitle: "プランの有効期限が切れました",
+    expiredDesc: "アクセス期間が終了しました。引き続きKaptikを利用するには更新してください。",
+    expiredCta: "プランを更新",
     panelTitle: "書き起こし",
     panelEmpty: "まもなく字幕が始まります",
     latest: "最新",
@@ -269,6 +279,9 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     vodLockTitle: "录制视频需要 Pro 套餐",
     vodLockDesc: "Basic 仅支持直播。升级到 Pro 即可为任意视频生成字幕。",
     planTestLabel: "套餐（测试）",
+    expiredTitle: "您的套餐已过期",
+    expiredDesc: "您的访问权限已结束。请续费以继续使用 Kaptik。",
+    expiredCta: "续费",
     panelTitle: "文字记录",
     panelEmpty: "字幕即将开始",
     latest: "最新",
@@ -334,6 +347,9 @@ const MESSAGES: Record<UiLanguage, Messages> = {
     vodLockTitle: "Video rekaman memerlukan paket Pro",
     vodLockDesc: "Basic hanya mencakup siaran langsung. Upgrade ke Pro untuk membuat subtitle di semua video.",
     planTestLabel: "Paket (uji)",
+    expiredTitle: "Paket Anda telah kedaluwarsa",
+    expiredDesc: "Masa akses Anda telah berakhir. Silakan perbarui untuk terus menggunakan Kaptik.",
+    expiredCta: "Perbarui Paket",
     panelTitle: "Transkrip",
     panelEmpty: "Subtitle akan segera dimulai",
     latest: "Terbaru",

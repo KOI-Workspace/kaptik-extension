@@ -1,7 +1,7 @@
 import type { LanguageCode } from "@/types/subtitle";
 
 /** 결제 등급 — free(미결제) / basic / pro */
-export type PlanTier = "free" | "basic" | "pro";
+export type PlanTier = "free" | "basic" | "pro" | "expired";
 
 /** JWT payload에서 plan 필드를 추출한다. 유효하지 않으면 "free" 반환. */
 export function decodeTokenPlan(token: string): PlanTier {
@@ -9,7 +9,7 @@ export function decodeTokenPlan(token: string): PlanTier {
     const segment = token.split(".")[1];
     if (!segment) return "free";
     const payload = JSON.parse(atob(segment.replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
-    if (payload.plan === "basic" || payload.plan === "pro") return payload.plan;
+    if (payload.plan === "basic" || payload.plan === "pro" || payload.plan === "expired") return payload.plan as PlanTier;
   } catch { /* invalid token */ }
   return "free";
 }
@@ -50,12 +50,13 @@ export interface KaptikSettings {
 
 /** 유료 등급(basic/pro) 여부 — 미결제(free)와 결제 후를 구분 */
 export function isPaid(plan: PlanTier): boolean {
-  return plan !== "free";
+  return plan === "basic" || plan === "pro";
 }
 
 /** devMode / authToken / plan 순서로 실제 등급을 결정한다 */
 export function getEffectivePlan(settings: KaptikSettings): PlanTier {
   if (settings.devMode) return "pro";
+  if (settings.plan === "expired") return "expired";
   if (settings.authToken) {
     const tokenPlan = decodeTokenPlan(settings.authToken);
     if (tokenPlan !== "free") return tokenPlan;

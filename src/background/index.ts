@@ -266,8 +266,11 @@ async function fetchStoredLiveCuesFromServer(
       await writeLiveCues(platform, videoId, language, compactedCues);
     }
     return compactedCues;
-  } catch (e) {
+  } catch (e: any) {
     console.warn(`[Kaptik BG Live] 서버 저장 자막 조회 실패 (${platform}/${videoId}):`, e);
+    if (e.status === 403 && (e.detail === "expired" || e.detail === "plan_expired")) {
+      void updateSettings({ plan: "expired" });
+    }
     return [];
   }
 }
@@ -399,7 +402,8 @@ async function handleStartGeneration(
     console.error("[Kaptik BG] Job 생성 실패:", e);
     if (e instanceof ApiError && e.status === 403) {
       if (e.detail === "quota_exceeded") return { type: "ERR_MONTHLY_LIMIT" };
-      // plan_expired / plan_required / 기타 403은 플랜 업그레이드 유도
+      if (e.detail === "plan_expired" || e.detail === "expired") return { type: "ERR_PLAN_EXPIRED" };
+      // plan_required / 기타 403은 플랜 업그레이드 유도
       return { type: "ERR_PLAN_REQUIRED" };
     }
     return { type: "ERR", error: e instanceof Error ? e.message : "Job 생성 실패" };
@@ -819,6 +823,14 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
       console.info(`[Kaptik BG Live] 라이브 화자 식별 → tab ${tabId}: ${speakerId} = ${member.name}`);
       const msg: BroadcastMessage = { type: "SPEAKER_IDENTIFIED", speakerId, name, member };
       chrome.tabs.sendMessage(tabId, msg).catch(() => {});
+    }
+    return;
+  }
+
+  if (data.type === "error") {
+    console.error(`[Kaptik BG Live] 서버 에러 (tab ${tabId}): ${String(data.code ?? "")}`);
+    if (data.code === "expired" || data.code === "plan_expired") {
+      void updateSettings({ plan: "expired" });
     }
     return;
   }
@@ -1282,7 +1294,7 @@ async function syncAuthFromCookie(token: string | null) {
     let profileImageUrl = settings.profileImageUrl;
     try {
       const profile = await fetchUserProfile(settings.serverUrl, token);
-      if (profile.plan === "basic" || profile.plan === "pro") {
+      if (profile.plan === "basic" || profile.plan === "pro" || profile.plan === "expired") {
         plan = profile.plan;
       }
       if (profile.subtitle_lang) {

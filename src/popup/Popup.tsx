@@ -186,6 +186,8 @@ export function Popup() {
       if (eta === "plan_required") {
         // 서버가 plan 부족을 알림 — 로컬 plan을 basic으로 업데이트하고 잠금 표시
         patch({ plan: "basic" as any });
+      } else if (eta === "plan_expired") {
+        patch({ plan: "expired" as any });
       } else if (eta === "monthly_limit") {
         setStatus({ state: "monthly_limit" });
       } else if (eta === "concurrent_job") {
@@ -254,9 +256,11 @@ export function Popup() {
     // YouTube VOD: 새 언어로 전환 — 서버에 이미 해당 언어 자막이 있으면 캐시 재사용
     prevStatusStateRef.current = "generating";
     setStatus({ state: "generating", etaSeconds: 0, progress: 0 });
-    void startGeneration(target.platform, target.videoId, false, newLang).then((eta) => {
+    void startGeneration(target.platform, target.videoId, true, newLang).then((eta) => {
       if (eta === "plan_required") {
         patch({ plan: "basic" as any });
+      } else if (eta === "plan_expired") {
+        patch({ plan: "expired" as any });
       } else if (eta === "monthly_limit") {
         setStatus({ state: "monthly_limit" });
       } else if (eta === "concurrent_job") {
@@ -291,6 +295,52 @@ export function Popup() {
   }
 
   const effectivePlan = getEffectivePlan(settings);
+
+  if (effectivePlan === "expired") {
+    return (
+      <div className="popup">
+        <header className="popup-header">
+          <div className="popup-brand">
+            <div className="popup-logo">
+              Kapti<span>k</span>
+            </div>
+            <div className="popup-subtitle">{t.appTagline}</div>
+          </div>
+          <div className="popup-header-right">
+            <div className="account">
+              <button
+                type="button"
+                className="account-avatar"
+                onClick={() => setAccountMenuOpen((v) => !v)}
+              >
+                {settings.profileImageUrl && !avatarImgFailed ? (
+                  <img
+                    src={settings.profileImageUrl}
+                    alt=""
+                    className="account-avatar-img"
+                    onError={() => setAvatarImgFailed(true)}
+                  />
+                ) : null}
+              </button>
+              {accountMenuOpen && (
+                <div className="account-menu">
+                  <button
+                    type="button"
+                    className="account-menu-item"
+                    onClick={handleLogout}
+                  >
+                    {t.logoutBtn}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+        <ExpiredView t={t} onUpgrade={openPricing} />
+      </div>
+    );
+  }
+
   // Basic 플랜은 라이브 스트림만 허용 — VOD는 업그레이드 유도
   const locked = target != null && !target.isLive && effectivePlan === "basic";
 
@@ -629,6 +679,19 @@ export function LockedView({ t, onUpgrade }: { t: Messages; onUpgrade: () => voi
       <div className="state-desc">{t.vodLockDesc}</div>
       <button type="button" className="upgrade-cta" onClick={onUpgrade}>
         {t.upgradeCta} →
+      </button>
+    </div>
+  );
+}
+
+export function ExpiredView({ t, onUpgrade }: { t: Messages; onUpgrade: () => void }) {
+  return (
+    <div className="state-block">
+      <div className="state-emoji">⚠️</div>
+      <div className="state-title">{t.expiredTitle}</div>
+      <div className="state-desc">{t.expiredDesc}</div>
+      <button type="button" className="upgrade-cta" onClick={onUpgrade}>
+        {t.expiredCta} →
       </button>
     </div>
   );

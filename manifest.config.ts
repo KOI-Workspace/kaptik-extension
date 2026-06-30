@@ -39,7 +39,6 @@ export default function getManifest(mode: string) {
         matches: [
           "*://*.youtube.com/*",
           "*://*.weverse.io/*",
-          "*://*.instagram.com/*",
         ],
         js: ["src/content/index.tsx"],
         run_at: "document_idle",
@@ -50,7 +49,6 @@ export default function getManifest(mode: string) {
     host_permissions: [
       "*://*.youtube.com/*",
       "*://*.weverse.io/*",
-      "*://*.instagram.com/*",
       "*://*.kaptik.site/*",
       ...(isDev ? ["http://localhost:8000/*"] : []),
     ],

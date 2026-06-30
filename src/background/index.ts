@@ -584,7 +584,7 @@ async function handleStartLiveStreaming(
     }
   } catch { /* content script 미응답 시 기존 흐름대로 진행 */ }
 
-  const sessionId = `live-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const sessionId = `live-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const session: LiveSession = {
     sessionId,
     platform,

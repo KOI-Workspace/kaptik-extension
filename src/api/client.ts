@@ -167,11 +167,10 @@ export async function createJob(opts: {
   force?: boolean;
 }): Promise<{ jobId: string }> {
   const base = wsUrlToHttp(opts.serverUrl);
-  const tokenParam = opts.authToken ? `?token=${encodeURIComponent(opts.authToken)}` : "";
   const body: Record<string, unknown> = { url: opts.url, target_lang: opts.targetLang };
   if (opts.force) body.force = true;
   const res = await fetchJson<{ job_id: string }>(
-    `${base}/jobs${tokenParam}`,
+    `${base}/jobs`,
     { method: "POST", body, authToken: opts.authToken },
   );
   return { jobId: res.job_id };
@@ -206,8 +205,7 @@ export async function fetchJob(opts: {
   jobId: string;
 }): Promise<JobResponse> {
   const base = wsUrlToHttp(opts.serverUrl);
-  const tokenParam = opts.authToken ? `?token=${encodeURIComponent(opts.authToken)}` : "";
-  return fetchJson<JobResponse>(`${base}/jobs/${opts.jobId}${tokenParam}`, { authToken: opts.authToken });
+  return fetchJson<JobResponse>(`${base}/jobs/${opts.jobId}`, { authToken: opts.authToken });
 }
 
 /** POST /reports — 자막 신고를 서버에 전송한다. */

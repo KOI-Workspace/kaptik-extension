@@ -67,7 +67,7 @@ interface PendingStage1 {
 export class StreamingSession {
   private ws: WebSocket | null = null;
   private pending = new Map<string | number, PendingStage1>();
-  private sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  private sessionId = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 
   constructor(
     private videoUrl: string,

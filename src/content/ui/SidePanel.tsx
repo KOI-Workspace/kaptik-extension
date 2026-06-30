@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { SubtitleCue, SubtitleTrack } from "@/types/subtitle";
 import type { KaptikSettings } from "@/shared/settings";
 import { PRICING_URL, isPaid, getEffectivePlan } from "@/shared/settings";
@@ -69,8 +69,8 @@ export function SidePanel({
     list.scrollTop = rowRelTop - list.clientHeight + row.clientHeight + 18;
   };
 
-  // 라이브: 활성 cue를 보고 있으면 새 cue 도착 시 자동 스크롤
-  useEffect(() => {
+  // 라이브: 활성 cue를 보고 있으면 새 cue 도착 시 자동 스크롤 (paint 전 보정으로 flash 방지)
+  useLayoutEffect(() => {
     if (!isLive) return;
     if (reportingCue) return;
     if (atBottom) scrollActiveRowToBottom();

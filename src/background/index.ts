@@ -603,31 +603,36 @@ async function handleStartLiveStreaming(
   // 세션 시작 시 저장된 cue 선로드.
   // seek 후 재마운트 시에도 기존 번역이 즉시 보이게 하고,
   // 서버의 cached=True 재전송이 Stage1에서 중복으로 판단될 수 있도록 langCues를 미리 채운다.
-  void readLiveCues(platform, videoId, language).then((rawStoredCues) => {
+  // 또한 저장 cue가 차지하는 영상 구간(cachedRanges)을 계산해 offscreen이 그 구간 재생 시 재전사를
+  // 막도록 CAPTURE_TAB에 함께 전달한다. 이 값이 필요하므로 CAPTURE_TAB 전에 await한다(로컬 스토리지라 빠름).
+  let cachedRanges: [number, number][] = [];
+  {
+    const rawStoredCues = await readLiveCues(platform, videoId, language);
     const storedCues = compactLiveCues(rawStoredCues, language);
-    if (storedCues.length === 0) return;
-    if ((session.cuesByLang.get(language) ?? []).length > 0) return; // 이미 채워진 경우 스킵
-
-    // captureStartVideoTime 이전 cue는 이전 세션에서 광고 구간에 캡처됐을 가능성이 있으므로 필터링.
-    // (예: HLS 내장 프리롤 광고를 미처 감지 못했을 때 0:00~0:13 광고 음성이 저장된 경우)
-    // 2초 여유를 둬 영상 시작 직전 rounding 오차를 허용한다.
-    // captureStartVideoTime = 0 이면 영상 맨 처음부터 시작한 세션이므로 필터 없이 전부 전달.
-    const minStart = session.captureStartVideoTime > 0
-      ? Math.max(0, session.captureStartVideoTime - 2)
-      : 0;
-    const filteredCues = minStart > 0 ? storedCues.filter((c) => c.start >= minStart) : storedCues;
-    if (filteredCues.length === 0) return;
-
-    session.cuesByLang.set(language, filteredCues);
-    if (filteredCues.length !== rawStoredCues.length) {
-      void writeLiveCues(platform, videoId, language, filteredCues);
+    if (storedCues.length > 0 && (session.cuesByLang.get(language) ?? []).length === 0) {
+      // captureStartVideoTime 이전 cue는 이전 세션에서 광고 구간에 캡처됐을 가능성이 있으므로 필터링.
+      // (예: HLS 내장 프리롤 광고를 미처 감지 못했을 때 0:00~0:13 광고 음성이 저장된 경우)
+      // 2초 여유를 둬 영상 시작 직전 rounding 오차를 허용한다.
+      // captureStartVideoTime = 0 이면 영상 맨 처음부터 시작한 세션이므로 필터 없이 전부 전달.
+      const minStart = session.captureStartVideoTime > 0
+        ? Math.max(0, session.captureStartVideoTime - 2)
+        : 0;
+      const filteredCues = minStart > 0 ? storedCues.filter((c) => c.start >= minStart) : storedCues;
+      if (filteredCues.length > 0) {
+        session.cuesByLang.set(language, filteredCues);
+        if (filteredCues.length !== rawStoredCues.length) {
+          void writeLiveCues(platform, videoId, language, filteredCues);
+        }
+        chrome.tabs.sendMessage(tabId, {
+          type: "CUE_READY",
+          videoId,
+          cues: filteredCues,
+        } satisfies BroadcastMessage).catch(() => {});
+        // compactLiveCues 결과는 정렬·비중첩이므로 [start, end]를 ms로 변환하면 그대로 유효한 구간이 된다.
+        cachedRanges = filteredCues.map((c) => [Math.round(c.start * 1000), Math.round(c.end * 1000)]);
+      }
     }
-    chrome.tabs.sendMessage(tabId, {
-      type: "CUE_READY",
-      videoId,
-      cues: filteredCues,
-    } satisfies BroadcastMessage).catch(() => {});
-  });
+  }
 
   // SW 재시작 후 offscreen 잔여 스트림이 탭을 점유할 수 있으므로
   // 캡처를 새로 시작하기 전에 기존 offscreen 문서를 확실히 정리한다.
@@ -693,6 +698,7 @@ async function handleStartLiveStreaming(
     videoUrl,
     captureStartSec: actualCaptureStartSec,
     initialMuted,
+    cachedRanges,
   }).catch(() => {});
 
   // content의 현재 재생 위치(초)를 0.5초마다 받아 offscreen에 전달 → 서버가 자막을 영상 위치에 정확히 꽂음.
@@ -947,6 +953,15 @@ function handleLiveCueMsg(tabId: number, data: Record<string, unknown>): void {
     const nextLangCues = upsertLiveCue(langCues, cue, cueLanguage);
     session.cuesByLang.set(cueLanguage, nextLangCues);
     void writeLiveCues(session.platform, session.videoId, cueLanguage, nextLangCues);
+
+    // 새로 확정된 자막 구간을 offscreen의 cachedRanges에 반영 → 이후 이 구간을 재생하면 무음 처리돼 재전사되지 않는다.
+    // (시작 시 seed한 이전 세션 cue 외에, 현재 세션에서 만들어진 구간까지 리스트를 최신 상태로 유지)
+    // 언어 무관하게 시간 좌표만 사용하므로 언어 조기 리턴 전에 보낸다.
+    chrome.runtime.sendMessage({
+      type: "ADD_CACHED_RANGE",
+      start: Math.round(cue.start * 1000),
+      end: Math.round(cue.end * 1000),
+    }).catch(() => {});
 
     console.info(`[Kaptik BG Live] CUE #${nextLangCues.length} → tab ${tabId}: [ko] "${p.text_ko}" / [${cueLanguage}] "${translated}" (ts=${startMs}ms, rawTs=${ts}ms, cached=${p.cached})`);
 

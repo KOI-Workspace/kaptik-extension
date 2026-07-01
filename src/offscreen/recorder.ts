@@ -5,7 +5,7 @@
  * over a WebSocket. Forwards STT/translation messages back to the SW.
  */
 
-import { shouldMuteReplay } from "./replayMute";
+import { shouldMuteReplay, isInsideCachedRange, mergeRange, type TimeRange } from "./replayMute";
 
 interface CaptureTabMsg {
   type: "CAPTURE_TAB";
@@ -20,6 +20,8 @@ interface CaptureTabMsg {
   captureStartSec?: number;
   /** 캡처 시작 시점에 이미 광고가 재생 중이면 true — 처음부터 무음 처리 */
   initialMuted?: boolean;
+  /** 이미 자막이 있는 영상 구간(ms) 목록. 이 구간 재생 시 STT로 무음 전송해 재전사를 막는다. */
+  cachedRanges?: TimeRange[];
 }
 
 let activeStream: MediaStream | null = null;
@@ -49,6 +51,9 @@ let maxVideoMs = 0;
 // 되감기(DVR rewind)로 이미 자막이 만들어진 구간을 다시 듣는 중이면 true →
 // 그 오디오를 무음으로 전송해 재전사(중복 자막)를 막는다.
 let replayMuted = false;
+// 이미 자막이 있는 영상 구간(ms). 재생 위치가 이 안에 들어오면 replayMuted 처리한다.
+// 캡처 시작 시 이전 세션의 저장 cue로 seed하고, 세션 중 새 cue가 확정될 때마다 ADD_CACHED_RANGE로 확장한다.
+let cachedRanges: TimeRange[] = [];
 
 async function startCapture(msg: CaptureTabMsg): Promise<void> {
   stopCapture();
@@ -87,6 +92,8 @@ async function startCapture(msg: CaptureTabMsg): Promise<void> {
   latestVideoMs = (msg.captureStartSec ?? 0) * 1000;
   maxVideoMs = latestVideoMs;
   replayMuted = false;
+  // 정렬·병합 상태를 보장하기 위해 seed 구간도 mergeRange로 정규화한다.
+  cachedRanges = (msg.cachedRanges ?? []).reduce<TimeRange[]>((acc, r) => mergeRange(acc, r), []);
 
   // 탭 캡처 시 원본 탭이 음소거됨 → Audio 요소로 원음질 그대로 복원
   playbackEl = new Audio();
@@ -216,24 +223,34 @@ function stopCapture(): void {
   latestVideoMs = 0;
   maxVideoMs = 0;
   replayMuted = false;
+  cachedRanges = [];
   adMuted = false;
   adMutedSince = 0;
 }
 
 chrome.runtime.onMessage.addListener(
-  (msg: { type: string; videoMs?: number; muted?: boolean; language?: string; sessionId?: string } & Partial<CaptureTabMsg>) => {
+  (msg: { type: string; videoMs?: number; muted?: boolean; language?: string; sessionId?: string; start?: number; end?: number } & Partial<CaptureTabMsg>) => {
     if (msg.type === "CAPTURE_TAB") {
       void startCapture(msg as CaptureTabMsg);
     } else if (msg.type === "STOP_CAPTURE") {
       stopCapture();
+    } else if (msg.type === "ADD_CACHED_RANGE") {
+      // 세션 중 새로 확정된 자막 구간을 추가 → 이후 그 구간을 재생하면 재전사 없이 무음 처리.
+      // 정렬·병합 상태를 유지한다. replayMuted은 다음 UPDATE_VIDEO_TIME(최대 500ms)에서 갱신된다.
+      if (typeof msg.start === "number" && typeof msg.end === "number") {
+        cachedRanges = mergeRange(cachedRanges, [msg.start, msg.end]);
+      }
     } else if (msg.type === "UPDATE_VIDEO_TIME") {
       // background가 0.5초마다 보내는 현재 영상 위치 — 점프 시 즉시 반영
       if (typeof msg.videoMs === "number" && Number.isFinite(msg.videoMs)) {
         const prevVideoMs = latestVideoMs;
         latestVideoMs = msg.videoMs;
 
-        // 되감기 판정: 라이브 최전방(maxVideoMs)보다 충분히 뒤면 무음 처리.
-        replayMuted = shouldMuteReplay(latestVideoMs, maxVideoMs);
+        // 되감기 판정: 라이브 최전방(maxVideoMs)보다 충분히 뒤면(shouldMuteReplay),
+        // 또는 이미 자막이 있는 구간(isInsideCachedRange)을 재생 중이면 무음 처리해 재전사를 막는다.
+        replayMuted =
+          shouldMuteReplay(latestVideoMs, maxVideoMs) ||
+          isInsideCachedRange(latestVideoMs, cachedRanges);
         // 되감기가 아니면 최전방 갱신 (앞으로 나아간 만큼만 올라간다)
         if (!replayMuted) {
           maxVideoMs = Math.max(maxVideoMs, latestVideoMs);

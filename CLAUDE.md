@@ -26,6 +26,34 @@ npm run icons        # 아이콘 재생성
 
 빌드 후 Chrome `chrome://extensions` → 개발자 모드 → `dist/` 폴더 로드. 코드 변경 시 확장 새로고침 + 해당 탭 새로고침 필요 (content script는 탭 새로고침 없이 반영 안 됨).
 
+## Branch 전략
+
+백엔드 서버 저장소는 `.github/workflows/deploy.yml`이 `main` push에 반응해 즉시 프로덕션(EC2)에 배포한다. 반면 익스텐션(`kaptik-extension`)은 CWS(크롬 웹스토어) 심사 때문에 배포까지 지연(수일)이 있어, 서버 버전과 확장 버전이 어긋날 수 있다.
+
+- **`develop`** — 기본 작업 브랜치. PR은 여기로 머지한다. push해도 배포되지 않는다. (이 저장소엔 GitHub Actions 자동배포 자체가 없지만, "브랜치=버전 상태"라는 개념을 백엔드 저장소와 통일하기 위한 규칙)
+- **`main`** — **CWS에 실제로 배포 완료된 버전만** 가리킨다. `develop → main` 머지는 짝이 되는 익스텐션 버전이 실제로 스토어 심사를 통과해 배포된 게 확인됐을 때만 수행한다 (아래 배포 절차의 Phase 2 참고).
+- `main` 머지 커밋에는 대응하는 익스텐션 버전을 명시한다 (예: 커밋 메시지에 "ext 0.2.0 호환" 등). 백엔드 저장소와 짝을 맞출 때 참고하는 관례.
+
+## 배포 및 버전 관리
+
+`v0.1.1` 같은 태그(tag, 특정 커밋에 붙이는 버전 이름표)는 **크롬 웹스토어(CWS)에 실제로 올라간 버전**을 가리킨다. 버전 숫자(`package.json`)와 태그가 항상 같은 커밋을 가리켜야 하므로, 배포는 **Claude Code에서 `/release` 명령**(`patch`가 기본, 기능 추가 시 `/release minor`)으로 진행한다.
+
+CWS 심사가 수일 걸리는 특성상, "버전을 올리는 시점"과 "실제로 스토어에 배포되는 시점"이 다르다. 그래서 `/release`는 **2단계**로 나뉜다 (`.claude/commands/release.md` 참고):
+
+**Phase 1 — 릴리즈 준비 (`develop`에서 진행, 기본 동작)**
+1. `npm run release` (내부적으로 `npm test && npx tsc --noEmit && npm version patch && npm run build:prod` 실행) — 자동 점검 통과 확인 → package.json 버전 올리기+커밋+태그 생성 → CWS 제출용 `dist/` 빌드까지 한 번에 처리.
+2. **push 직전에 사용자에게 한 번 확인**을 받는다 (GitHub는 다른 사람도 보는 공유 저장소라 자동으로 밀어넣지 않음).
+3. 확인 후 `git push origin develop --follow-tags`로 커밋과 태그를 함께 push.
+4. 사용자가 `dist/` zip을 CWS 개발자 대시보드에 직접 업로드해 제출. 같은 zip을 GitHub Release(태그에 파일을 첨부해 보관하는 기능)에도 올려두길 권장 — 나중에 리뷰 반려 대응이나 롤백 시 "그때 정확히 뭘 제출했는지" 바로 확인 가능.
+
+**Phase 2 — main에 반영 (`/release promote`, CWS 배포 확인 후에만 실행)**
+1. CWS에서 해당 버전이 **실제로 심사를 통과해 스토어에 뜬 것**을 사용자가 확인해준 뒤에만 진행.
+2. `main`을 최신으로 받고, `develop`을 fast-forward 머지.
+3. **push 직전에 사용자에게 한 번 더 확인**을 받는다.
+4. 확인 후 `git push origin main --follow-tags`.
+
+수동으로 할 경우에도 위와 같은 순서(Phase 1: develop에서 테스트/타입체크 → 버전+태그 → push → 빌드/제출, Phase 2: 배포 확인 후 main 반영)를 지킨다. **CWS 승인 전에 절대 main에 직접 push하지 않는다** — main의 커밋 히스토리는 "지금 스토어에 실제로 떠 있는 상태"와 항상 일치해야 함.
+
 ## 아키텍처
 
 MV3 Chrome 확장으로 4개의 독립 실행 컨텍스트가 메시지로 통신한다.

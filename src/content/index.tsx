@@ -55,6 +55,11 @@ class SubtitleController {
   private startStreamingFn: ((seekSec: number, keepCues?: boolean) => void) | null = null;
   /** 평가 진행 중 플래그 — 긴 await 동안 중복 evaluate가 끼어들어 취소시키는 것을 방지 */
   private evaluating = false;
+  /** evaluating 중에 들어온 재평가 요청을 기억해뒀다가, 끝나자마자 한 번 더 실행한다.
+   * (예: 언어 재생성 완료 SUBTITLES_READY가 하필 다른 evaluate() 실행 중에 도착하면
+   * 이 플래그가 없을 때는 그냥 유실되어, 다음 트리거가 올 때까지 — 최악의 경우 새로고침할
+   * 때까지 — 화면이 갱신되지 않는다.) */
+  private pendingReevaluate = false;
   /** 1500ms 주기 evaluate 타이머 ID (컨텍스트 무효화 시 정리용) */
   private evalTimer: number | undefined = undefined;
   /** 확장 컨텍스트 무효화로 폐기됨 — 이후 모든 동작 no-op */
@@ -237,8 +242,12 @@ class SubtitleController {
       this.dispose();
       return;
     }
-    // 이미 평가 중이면 끼어들지 않는다 (긴 await가 취소되는 무한 루프 방지)
-    if (this.evaluating) return;
+    // 이미 평가 중이면 끼어들지 않는다 (긴 await가 취소되는 무한 루프 방지).
+    // 대신 "끝나면 한 번 더 돌아라"를 예약해 이번 트리거가 유실되지 않게 한다.
+    if (this.evaluating) {
+      this.pendingReevaluate = true;
+      return;
+    }
     this.evaluating = true;
     const urlAtStart = location.href;
     try {
@@ -254,13 +263,14 @@ class SubtitleController {
         return;
       }
 
-      // 사이드 컬럼(관련영상 영역) 또는 영상 아래 — 화면 폭에 따라 달라진다(반응형)
-      const panelContainer = this.adapter.getPanelContainer();
-      const overlayContainer = this.adapter.getOverlayContainer();
-
       // 같은 영상, 같은 패널이면 유지 (video 요소가 일시적으로 null이어도 세션 유지)
       // YouTube SPA가 video 요소를 새 인스턴스로 교체한 경우에만 재마운트
       const currentVideo = this.adapter.getVideoElement();
+      // 사이드 컬럼(관련영상 영역) 또는 영상 아래 — 화면 폭에 따라 달라진다(반응형)
+      // currentVideo를 넘겨 getPanelContainer/getOverlayContainer가 서로 다른
+      // <video>를 다시 조회하는 경합을 없앤다(위버스 등 querySelector 기반 어댑터).
+      const panelContainer = this.adapter.getPanelContainer(currentVideo);
+      const overlayContainer = this.adapter.getOverlayContainer(currentVideo);
       if (this.mounted?.videoId === videoId) {
         // alwaysCapture 사이트도 플레이어 DOM이 교체되면 기존 Shadow DOM이 화면에서 분리될 수 있다.
         // 같은 DOM이면 유지하고, 컨테이너/비디오가 바뀐 경우만 아래에서 재마운트한다.
@@ -317,7 +327,11 @@ class SubtitleController {
         return;
       }
 
-      const container = this.adapter.getOverlayContainer();
+      // 오버레이 컨테이너(플레이어 래퍼).
+      // 위버스 등은 video 크기 기준으로 추론하는데, 새로고침 직후처럼 아직 레이아웃 전이면
+      // (가로폭 0) 못 찾은 것으로 처리된다(heuristics.ts findVideoBox). 패널과 동일하게
+      // 마운트 직전에 잠깐(최대 1.5초) 재시도해 그 타이밍 문제를 없앤다.
+      const container = await waitFor(() => this.adapter.getOverlayContainer(video), 1500);
       if (!container) {
         console.info("[Kaptik] overlay container 못 찾음");
         return;
@@ -329,7 +343,7 @@ class SubtitleController {
       // 기다려 그 타이밍 문제를 없앤다. 그래도 없으면 기존대로 null → 오버레이 폴백.
       // (마운트 '후'에는 재탐색하지 않는다 — 댓글이 다 로드된 뒤의 거대 본문 컬럼을 잘못 집는 것을 방지)
       const dockColumn =
-        (await waitFor(() => this.adapter.getPanelContainer(), 1500)) ?? panelContainer;
+        (await waitFor(() => this.adapter.getPanelContainer(video), 1500)) ?? panelContainer;
 
       // URL은 /live/ 경로여도 종료된 라이브(다시보기)는 녹화(replay)다. video.duration으로 실제 판정.
       // alwaysCapture 플랫폼(Weverse 등)은 광고 video의 유한 duration에 속지 않도록 URL 판단만 사용.
@@ -539,9 +553,11 @@ class SubtitleController {
       console.info(`[Kaptik] 자막 마운트 완료 (${this.adapter.platform}/${videoId}, isLive=${isLive})`);
     } finally {
       this.evaluating = false;
-      // evaluate 실행 중 URL이 변경됐으면 재실행
+      // evaluate 실행 중 URL이 변경됐거나, 그 사이 다른 트리거(예: SUBTITLES_READY)가
+      // 재평가를 요청했으면 재실행한다.
       // (pushState가 evaluating lock에 막혀 무시됐을 때: lastUrl이 업데이트됐지만 evaluate는 실행 안 됨)
-      if (location.href !== urlAtStart) {
+      if (location.href !== urlAtStart || this.pendingReevaluate) {
+        this.pendingReevaluate = false;
         void this.evaluate();
       }
     }

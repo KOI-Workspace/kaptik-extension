@@ -76,14 +76,14 @@ export const weverseAdapter: SiteAdapter = {
     return document.querySelector("video") as HTMLVideoElement | null;
   },
 
-  getOverlayContainer() {
-    const video = this.getVideoElement();
-    return video ? findVideoBox(video) : null;
+  getOverlayContainer(video) {
+    const v = video ?? this.getVideoElement();
+    return v ? findVideoBox(v) : null;
   },
 
-  getPanelContainer() {
-    const video = this.getVideoElement();
-    return video ? findDockColumn(video) : null;
+  getPanelContainer(video) {
+    const v = video ?? this.getVideoElement();
+    return v ? findDockColumn(v) : null;
   },
 
   isLive(url: string): boolean {

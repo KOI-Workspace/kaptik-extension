@@ -1,6 +1,6 @@
 node_modules
 dist
-dist.zip
+*.zip
 *.local
 .claude/
 .DS_Store
@@ -8,3 +8,4 @@ dist.zip
 .env*
 !.env.example
 vite.config.ts.timestamp-*.mjs
+.idea/

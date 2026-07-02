@@ -13,7 +13,7 @@ import threading
 import websockets
 from playwright.sync_api import sync_playwright, Page, BrowserContext
 
-DIST = pathlib.Path(__file__).parent / "dist"
+DIST = pathlib.Path(__file__).parent.parent.parent / "dist"
 PROFILE = pathlib.Path("/tmp/kaptik-gentest-profile")  # 새 프로필
 SERVER_URL = "ws://localhost:8000"
 HTTP_URL = "http://localhost:8000"

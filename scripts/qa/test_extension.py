@@ -8,7 +8,7 @@ import time
 import pathlib
 from playwright.sync_api import sync_playwright, Page, BrowserContext
 
-DIST = pathlib.Path(__file__).parent / "dist"
+DIST = pathlib.Path(__file__).parent.parent.parent / "dist"
 PROFILE = pathlib.Path("/tmp/kaptik-test-profile")
 
 # 2분 이내 BTS 영상 — 변경 가능

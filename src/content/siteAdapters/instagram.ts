@@ -51,13 +51,13 @@ export const instagramAdapter: SiteAdapter = {
       .sort((a, b) => b.area - a.area)[0].v as HTMLVideoElement;
   },
 
-  getOverlayContainer() {
-    const video = this.getVideoElement();
-    return video ? findVideoBox(video) : null;
+  getOverlayContainer(video) {
+    const v = video ?? this.getVideoElement();
+    return v ? findVideoBox(v) : null;
   },
 
-  getPanelContainer() {
-    const video = this.getVideoElement();
-    return video ? findDockColumn(video) : null;
+  getPanelContainer(video) {
+    const v = video ?? this.getVideoElement();
+    return v ? findDockColumn(v) : null;
   },
 };

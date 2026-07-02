@@ -10,11 +10,14 @@
 export function findVideoBox(video: HTMLVideoElement): HTMLElement | null {
   if (!video.parentElement) return null;
   const vRect = video.getBoundingClientRect();
+  // 아직 레이아웃되지 않은 video(가로폭 0)는 조상 크기 비교 자체가 무의미하다.
+  // 이 상태에서 부모 요소를 그대로 반환하면 "찾긴 찾았지만 엉뚱하게 작은 박스"가
+  // 오버레이 컨테이너로 채택돼버린다. null을 반환해 호출 측이 재시도하게 한다.
+  if (vRect.width === 0) return null;
   let node: HTMLElement = video.parentElement;
   while (node.parentElement && node.parentElement !== document.body) {
     const pr = node.parentElement.getBoundingClientRect();
     const sameBox =
-      vRect.width > 0 &&
       pr.width <= vRect.width * 1.06 &&
       pr.height <= vRect.height * 1.06;
     if (sameBox) node = node.parentElement;

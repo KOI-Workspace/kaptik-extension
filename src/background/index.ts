@@ -786,8 +786,10 @@ function handleSetLiveLang(tabId: number, language: string): void {
   if (session) {
     if (session.language === language) return; // 동일 언어면 무시
     session.language = language;
-    // 언어 변경 전 요청의 stage2가 뒤늦게 도착하면 언어가 섞여 보일 수 있어 대기 중인 조각은 버린다.
-    session.pending.clear();
+    // 전환 전 인식(STT)됐지만 아직 번역 중이던 문장은 그대로 둔다 — 각 항목은 이미
+    // p.language에 "인식 시점 언어"가 찍혀 있고, 화면 반영 여부는 handleLiveCueMsg의
+    // cueLanguage !== session.language 체크가 걸러주므로 언어가 섞여 보일 위험은 없다.
+    // 여기서 pending.clear()로 지우면 실익 없이 전환 순간 인식 중이던 문장만 유실된다.
     // 해당 언어 칠판으로 전환. 이전에 쌓인 cue가 있으면 즉시 화면에 복원.
     const existingCues = compactLiveCues(session.cuesByLang.get(language) ?? [], language);
     if (existingCues.length > 0) session.cuesByLang.set(language, existingCues);

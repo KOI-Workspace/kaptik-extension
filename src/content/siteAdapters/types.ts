@@ -18,14 +18,18 @@ export interface SiteAdapter {
   /**
    * 오버레이를 붙일 컨테이너 (보통 플레이어 래퍼).
    * 전체화면에서도 유지되도록 video를 감싸는 요소를 반환한다.
+   * @param video 이미 확보한 video 요소가 있으면 전달 — 내부에서 다시
+   *   querySelector("video")를 호출하지 않아, 같은 evaluate() 실행 안에서
+   *   getPanelContainer()와 서로 다른 video를 가리키는 경합을 막는다.
    */
-  getOverlayContainer(): HTMLElement | null;
+  getOverlayContainer(video?: HTMLVideoElement | null): HTMLElement | null;
   /**
    * 자막 히스토리 패널을 끼워 넣을 사이드 컬럼 컨테이너.
    * 영상 옆(예: YouTube 관련영상 영역)에 패널을 도킹할 위치를 반환한다.
    * 적절한 위치가 없으면 null — 이 경우 패널은 영상 위 오버레이로 폴백한다.
+   * @param video getOverlayContainer 참고.
    */
-  getPanelContainer(): HTMLElement | null;
+  getPanelContainer(video?: HTMLVideoElement | null): HTMLElement | null;
   /** 현재 URL이 라이브 스트림인지 여부 (미구현 어댑터는 항상 false). */
   isLive?(url: string): boolean;
   /**
